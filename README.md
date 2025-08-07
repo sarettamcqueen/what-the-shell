@@ -14,7 +14,7 @@ Tutti i comandi della shell agiscono **esclusivamente all’interno del filesyst
 
 ## ✨ Funzionalità previste
 
-- [x] Inizializzazione del filesystem (`format`)
+- [ ] Inizializzazione del filesystem (`format`)
 - [ ] Navigazione tra directory (`cd`, `ls`)
 - [ ] Creazione file e directory (`touch`, `mkdir`)
 - [ ] Lettura e scrittura su file (`cat`, `append <file> <testo>`)
