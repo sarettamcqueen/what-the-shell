@@ -5,14 +5,14 @@
 
 ---
 
-## 🧠 Description
+## Description
 
 **What the Shell** is an interactive shell operating on a **persistent simulated filesystem**, implemented inside a binary file (`fs.img`) acting as a virtual disk.  
 All shell commands operate **exclusively within the virtual filesystem**, which is managed in memory using `mmap`.
 
 ---
 
-## ✨ Planned Features
+## Planned Features
 
 - [ ] Filesystem initialization (`format`)
 - [ ] Directory navigation (`cd`, `ls`)
