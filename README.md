@@ -11,7 +11,7 @@ The project is structured in layers as shown in the image below:
 
 ## Roadmap
 
-- [ ] Implement the **Disk Emulator** module (`disk.c`, `disk.h`)
+- [X] Implement the **Disk Emulator** module (`disk.c`, `disk.h`)
 - [ ] Define filesystem data structures (superblock, inodes, directories)
 - [ ] Implement basic filesystem operations (`fs_mkdir`, `fs_touch`, `fs_ls`, ...)
 - [ ] Develop the shell interface
