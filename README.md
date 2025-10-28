@@ -5,11 +5,13 @@ The filesystem is persistent and stored inside a disk image file, which is memor
 
 ## Architecture
 
-The project is structured in layers as shown in the image below:
+The project is structured in layers as illustrated below. Each layer provides a clear abstraction boundary, separating low-level disk operations from higher-level filesystem logic.
 
 ![Architecture](LayeredArchitecture.png)
 
 ## Roadmap
+
+A bottom-up approach is being followed for the incremental implementation of the modules described.
 
 - [X] Implement the **Disk Emulator** module (`disk.c`, `disk.h`)
 - [ ] Define filesystem data structures (superblock, inodes, directories)
