@@ -1,23 +1,26 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c99 -g
 SRCDIR = src
+TESTDIR = tests
 BUILDDIR = build
 
 DISK_SRC = $(SRCDIR)/disk/disk.c
 DISK_OBJ = $(BUILDDIR)/disk.o
+TEST_SRC = $(TESTDIR)/test_disk.c
+TEST_BIN = $(BUILDDIR)/test_disk
 
-all: dirs test_disk
+all: dirs $(TEST_BIN)
 
 dirs:
 	@mkdir -p $(BUILDDIR)
 
-$(BUILDDIR)/disk.o: $(SRCDIR)/disk/disk.c
+$(DISK_OBJ): $(DISK_SRC)
 	$(CC) $(CFLAGS) -I$(SRCDIR)/disk -c $< -o $@
 
-test_disk: $(DISK_OBJ) test_disk.c
-	$(CC) $(CFLAGS) -I$(SRCDIR)/disk test_disk.c $(DISK_OBJ) -o test_disk
+$(TEST_BIN): $(DISK_OBJ) $(TEST_SRC)
+	$(CC) $(CFLAGS) -I$(SRCDIR)/disk -I$(TESTDIR) $(TEST_SRC) $(DISK_OBJ) -o $(TEST_BIN)
 
 clean:
-	rm -rf $(BUILDDIR) test_disk *.img
+	rm -rf $(BUILDDIR) *.img
 
 .PHONY: all clean dirs

@@ -38,6 +38,8 @@ int disk_attach(const char* filename, size_t size, bool create_new, disk_t* disk
         return DISK_ERROR;
     }
 
+    *disk = NULL;
+
     disk_t d = malloc(sizeof(struct disk_emulator));
     if (!d) {
         return DISK_ERROR;
