@@ -14,6 +14,6 @@ The project is structured in layers as illustrated below. Each layer provides a 
 A bottom-up approach is being followed for the incremental implementation of the modules described.
 
 - [X] Implement the **Disk Emulator** module (`disk.c`, `disk.h`)
-- [ ] Define filesystem data structures (superblock, inodes, directories)
+- [X] Define filesystem data structures (superblock, inodes, directories)
 - [ ] Implement basic filesystem operations (`fs_mkdir`, `fs_touch`, `fs_ls`, ...)
 - [ ] Develop the shell interface
