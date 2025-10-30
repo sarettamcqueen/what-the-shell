@@ -26,7 +26,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <time.h>
-#include <fcntl.h>>
+#include <fcntl.h>
 
 // === GLOBAL CONSTANTS ===
 #define BLOCK_SIZE 512

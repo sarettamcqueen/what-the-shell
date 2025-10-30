@@ -7,6 +7,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <sys/types.h>
 
 // disk emulator struct definition (it is private here in disk.c)
 struct disk_emulator {
