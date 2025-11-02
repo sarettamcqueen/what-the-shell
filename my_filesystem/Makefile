@@ -16,6 +16,10 @@ COMMON_OBJ = $(BUILDDIR)/common.o
 BITMAP_SRC = $(SRCDIR)/utils/bitmap.c
 BITMAP_OBJ = $(BUILDDIR)/bitmap.o
 
+# superblock module
+SUPERBLOCK_SRC = $(SRCDIR)/filesystem/superblock.c
+SUPERBLOCK_OBJ = $(BUILDDIR)/superblock.o
+
 # test binaries
 TEST_DISK_SRC = $(TESTDIR)/test_disk.c
 TEST_DISK_BIN = $(BUILDDIR)/test_disk
@@ -69,6 +73,11 @@ $(COMMON_OBJ): $(COMMON_SRC) include/common.h
 $(BITMAP_OBJ): $(BITMAP_SRC) $(SRCDIR)/utils/bitmap.h include/common.h
 	@echo "Compiling bitmap module..."
 	@$(CC) $(CFLAGS) -I$(SRCDIR)/utils -c $< -o $@
+
+# compile superblock.o
+$(SUPERBLOCK_OBJ): $(SUPERBLOCK_SRC) $(SRCDIR)/filesystem/superblock.h include/common.h
+	@echo "Compiling superblock module..."
+	@$(CC) $(CFLAGS) -I$(SRCDIR)/filesystem -c $< -o $@
 
 # link test_disk
 $(TEST_DISK_BIN): $(DISK_OBJ) $(TEST_DISK_SRC)
