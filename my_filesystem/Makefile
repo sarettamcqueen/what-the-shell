@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -g -Iinclude
+CFLAGS = -Wall -Wextra -std=gnu99 -g -Iinclude
 SRCDIR = src
 TESTDIR = tests
 BUILDDIR = build
@@ -19,6 +19,10 @@ BITMAP_OBJ = $(BUILDDIR)/bitmap.o
 # superblock module
 SUPERBLOCK_SRC = $(SRCDIR)/filesystem/superblock.c
 SUPERBLOCK_OBJ = $(BUILDDIR)/superblock.o
+
+# inode module
+INODE_SRC = $(SRCDIR)/filesystem/inode.c
+INODE_OBJ = $(BUILDDIR)/inode.o
 
 # test binaries
 TEST_DISK_SRC = $(TESTDIR)/test_disk.c
@@ -60,12 +64,12 @@ dirs:
 	@mkdir -p $(BUILDDIR)
 
 # compile disk.o
-$(DISK_OBJ): $(DISK_SRC) $(SRCDIR)/disk/disk.h
+$(DISK_OBJ): $(DISK_SRC) $(SRCDIR)/disk/disk.h include/config.h
 	@echo "Compiling disk module..."
 	@$(CC) $(CFLAGS) -I$(SRCDIR)/disk -c $< -o $@
 
 # compile common.o
-$(COMMON_OBJ): $(COMMON_SRC) include/common.h
+$(COMMON_OBJ): $(COMMON_SRC) include/common.h include/config.h
 	@echo "Compiling common module..."
 	@$(CC) $(CFLAGS) -c $< -o $@
 
@@ -78,6 +82,11 @@ $(BITMAP_OBJ): $(BITMAP_SRC) $(SRCDIR)/utils/bitmap.h include/common.h
 $(SUPERBLOCK_OBJ): $(SUPERBLOCK_SRC) $(SRCDIR)/filesystem/superblock.h include/common.h
 	@echo "Compiling superblock module..."
 	@$(CC) $(CFLAGS) -I$(SRCDIR)/filesystem -c $< -o $@
+
+# compile inode.o
+$(INODE_OBJ): $(INODE_SRC) $(SRCDIR)/filesystem/inode.h $(SRCDIR)/utils/bitmap.h include/common.h
+	@echo "Compiling inode module..."
+	@$(CC) $(CFLAGS) -I$(SRCDIR)/filesystem -I$(SRCDIR)/utils -c $< -o $@
 
 # link test_disk
 $(TEST_DISK_BIN): $(DISK_OBJ) $(TEST_DISK_SRC)

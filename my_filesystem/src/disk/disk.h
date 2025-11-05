@@ -4,9 +4,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <sys/types.h>
-
-#define BLOCK_SIZE 512
-#define MAX_FILENAME 256
+#include "config.h"
 
 // error codes
 #define DISK_SUCCESS 0

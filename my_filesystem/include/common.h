@@ -27,10 +27,11 @@
 #include <stdbool.h>
 #include <time.h>
 #include <fcntl.h>
+#include "config.h"
 
 // === GLOBAL CONSTANTS ===
-#define BLOCK_SIZE 512
-#define MAX_FILENAME 250            // 250 instead of 256 so that the dentry structure is exactly 256B
+#define INODE_SIZE 128                                  // TODO: add a compile-time check that sizeof(struct inode) == INODE_SIZE
+#define INODES_PER_BLOCK (BLOCK_SIZE / INODE_SIZE)      // TODO: add a compile-time check that ((BLOCK_SIZE % INODE_SIZE) == 0                               
 #define MAX_PATH 1024
 #define MAGIC_NUMBER 0x12345678
 
@@ -51,26 +52,34 @@
 
 // === SHARED STRUCTURES ===
 
-// Filesystem Superblock
+// Filesystem Superblock (104B)
 struct superblock {
-    uint32_t magic_number;      // magic number for FS validation
+    uint32_t magic_number;         // magic number for FS validation
 
-    uint32_t total_blocks;      // total number of blocks on the disk
-    uint32_t total_inodes;      // total number of inodes on the disk
+    uint32_t total_blocks;         // total number of blocks on the disk
+    uint32_t total_inodes;         // total number of inodes on the disk
 
-    uint32_t free_blocks;       // free blocks count
-    uint32_t free_inodes;       // free inodes count
+    uint32_t free_blocks;          // free blocks count
+    uint32_t free_inodes;          // free inodes count
 
-    uint32_t block_size;        // size of a block in bytes
-    uint32_t inode_size;        // size of an inode in bytes
-            
-    uint32_t first_data_block;  // offset to the first data block
+    uint32_t block_size;           // size of a block in bytes
+    uint32_t inode_size;           // size of an inode in bytes
 
-    time_t   created_time;      // filesystem creation timestamp
-    time_t   last_mount_time;   // last mount timestamp
-    uint32_t mount_count;       
-    uint32_t reserved[16];      // reserved space for future expansions
+    uint32_t block_bitmap_start;   // first block of data block bitmap (usually 1)
+    uint32_t block_bitmap_blocks;  // number of blocks for data block bitmap
+    uint32_t inode_bitmap_start;   // first block of inode bitmap (usually 2)
+    uint32_t inode_bitmap_blocks;  // number of blocks for inode bitmap
+    uint32_t inode_table_start;    // first block of inode table (usually 3)
+    uint32_t inode_table_blocks;   // number of blocks for inode table
+    uint32_t first_data_block;     // first block of data area
+
+    time_t   created_time;         // filesystem creation timestamp
+    time_t   last_mount_time;      // last mount timestamp
+    uint32_t mount_count;
+
+    uint32_t reserved[8];          // reserved for future expansions
 } __attribute__((packed));
+
 
 // Inode (128B --> 1 block contains exactly 4 inodes)
 struct inode {

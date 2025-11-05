@@ -12,7 +12,7 @@ int superblock_read(disk_t disk, struct superblock* sb);
 int superblock_write(disk_t disk, const struct superblock* sb);
 
 // initializes and saves a new superblock (format)
-int superblock_init(disk_t disk, struct superblock* sb, size_t total_blocks, size_t total_inodes, size_t block_size, size_t inode_size);
+int superblock_init(disk_t disk, struct superblock* sb, size_t total_blocks, size_t total_inodes);
 
 // prints superblock info
 void superblock_print(const struct superblock* sb);
