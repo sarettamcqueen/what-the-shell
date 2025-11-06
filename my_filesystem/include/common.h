@@ -1,23 +1,41 @@
 /**
    Common header file.
  
-   This file defines constants, data structures, macros, and some utility functions
+   This file defines constants, data structures, macros, and utility functions
    shared across the various modules that make up the filesystem.
   
    Contents:
-    - Global constants (block size, limits, standard error codes)
+    - Global constants:
+        - Sizes and counts (inode size, dentry size, entries per block)
+        - Magic number for filesystem validation
+        - Path length limits
+    - Reserved inodes and blocks:
+        - Invalid inode marker (inode 0)
+        - Root directory inode (inode 2)
+        - Superblock location (block 0)
     - Inode type definitions (free, file, directory)
+    - Standard error codes
     - Core filesystem structures:
-        - superblock: global filesystem metadata
-        - inode: descriptor of a file/directory
-        - dentry: directory entry mapping a name to an inode
-    - Utility macros for block alignment and size calculations
-    - Function prototypes for common operations (error handling,
-      timestamp printing, and filename validation)
+        - superblock: global filesystem metadata and disk layout
+        - inode: descriptor of a file/directory with pointers to data blocks
+        - dentry: directory entry mapping a filename to an inode number
+    - Utility macros:
+        - Block alignment and size calculations
+        - Min/max operations
+    - Function prototypes:
+        - Error code to string conversion
+        - Timestamp printing
+        - Filename validation
   
    All structures are marked with `__attribute__((packed))` to prevent
    automatic padding and ensure that their sizes align precisely with
    the expected block layout of the filesystem.
+   
+   Design notes:
+    - Inode 0 is reserved as an invalid marker (never allocated)
+    - Inode 1 is available for allocation (not reserved in this implementation)
+    - Inode 2 is the root directory (Unix standard convention)
+    - Block 0 always contains the superblock
  */
 
 #pragma once
@@ -29,16 +47,25 @@
 #include <fcntl.h>
 #include "config.h"
 
-// === GLOBAL CONSTANTS ===
+// === SIZES AND COUNTS ===
 #define INODE_SIZE 128                                  // TODO: add a compile-time check that sizeof(struct inode) == INODE_SIZE
-#define INODES_PER_BLOCK (BLOCK_SIZE / INODE_SIZE)      // TODO: add a compile-time check that ((BLOCK_SIZE % INODE_SIZE) == 0                               
+#define INODES_PER_BLOCK (BLOCK_SIZE / INODE_SIZE)      // TODO: add a compile-time check that ((BLOCK_SIZE % INODE_SIZE) == 0
+#define DENTRY_SIZE 256
+#define DENTRIES_PER_BLOCK (BLOCK_SIZE / DENTRY_SIZE)                              
 #define MAX_PATH 1024
 #define MAGIC_NUMBER 0x12345678
+
+// === RESERVED INODES ===
+#define INVALID_INODE_NUM 0     // reserved, never used
+#define ROOT_INODE_NUM 2        // root directory
 
 // === FILE TYPES ===
 #define INODE_TYPE_FREE      0
 #define INODE_TYPE_FILE      1
 #define INODE_TYPE_DIRECTORY 2
+
+// === RESERVED BLOCKS ===
+#define SUPERBLOCK_BLOCK_NUM 0   // superblock location (fixed)
 
 // === COMMON ERROR CODES ===
 #define SUCCESS           0
@@ -52,7 +79,7 @@
 
 // === SHARED STRUCTURES ===
 
-// Filesystem Superblock (104B)
+// Filesystem Superblock (108B)
 struct superblock {
     uint32_t magic_number;         // magic number for FS validation
 

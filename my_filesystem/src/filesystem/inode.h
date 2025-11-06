@@ -4,9 +4,6 @@
 #include "disk.h"
 #include "bitmap.h"
 
-#define ROOT_INODE_NUM 2
-#define INVALID_INODE_NUM (uint32_t)-1
-
 int inode_read(disk_t disk, uint32_t inode_num, struct inode* out_inode);
 int inode_write(disk_t disk, uint32_t inode_num, const struct inode* in_inode);
 

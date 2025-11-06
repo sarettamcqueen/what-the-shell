@@ -3,8 +3,6 @@
 #include "common.h"
 #include "disk.h"
 
-#define SUPERBLOCK_BLOCK_NUM 0
-
 // load superblock from disk
 int superblock_read(disk_t disk, struct superblock* sb);
 
