@@ -5,22 +5,30 @@
 
 int superblock_read(disk_t disk, struct superblock* sb) {
     if (!disk || !sb) return ERROR_INVALID;
-    int res = disk_read_block(disk, SUPERBLOCK_BLOCK_NUM, sb);
+
+    uint8_t buffer[BLOCK_SIZE];
+    int res = disk_read_block(disk, SUPERBLOCK_BLOCK_NUM, buffer);
     if (res != DISK_SUCCESS) return ERROR_IO;
-    return superblock_valid(sb) ? SUCCESS : ERROR_INVALID;
+
+    memcpy(sb, buffer, sizeof(struct superblock));
+    return superblock_is_valid(sb) ? SUCCESS : ERROR_INVALID;
 }
 
 int superblock_write(disk_t disk, const struct superblock* sb) {
     if (!disk || !sb) return ERROR_INVALID;
-    int res = disk_write_block(disk, SUPERBLOCK_BLOCK_NUM, sb);
+
+    uint8_t buffer[BLOCK_SIZE] = {0};
+    memcpy(buffer, sb, sizeof(struct superblock));
+
+    int res = disk_write_block(disk, SUPERBLOCK_BLOCK_NUM, buffer);
     if (res != DISK_SUCCESS) return ERROR_IO;
+
     return SUCCESS;
 }
 
-// basic initialization of most important fields
 int superblock_init(disk_t disk, struct superblock* sb, size_t total_blocks, size_t total_inodes) {
     if (!disk || !sb) return ERROR_INVALID;
-    if(total_blocks >= disk_get_blocks(disk)) return ERROR_NO_SPACE;
+    if(total_blocks > disk_get_blocks(disk)) return ERROR_NO_SPACE;
     
     memset(sb, 0, sizeof(struct superblock));
     
@@ -72,7 +80,6 @@ int superblock_init(disk_t disk, struct superblock* sb, size_t total_blocks, siz
     return SUCCESS;
 }
 
-
 void superblock_print(const struct superblock* sb) {
     if (!sb) {
         printf("Superblock: NULL\n");
@@ -94,6 +101,24 @@ void superblock_print(const struct superblock* sb) {
     printf("\n  Mount count    : %u\n", sb->mount_count);
 }
 
-int is_superblock_valid(const struct superblock* sb) {
-    return sb && sb->magic_number == MAGIC_NUMBER;
+bool superblock_is_valid(const struct superblock* sb) {
+    if (!sb)
+        return false;
+    
+    // check 1: magic number
+    if (sb->magic_number != MAGIC_NUMBER)
+        return false;
+    
+    // check 2: sizes
+    if (sb->block_size != BLOCK_SIZE || sb->inode_size != INODE_SIZE)
+        return false;
+    
+    // check 3: counters
+    if (sb->free_blocks > sb->total_blocks)
+        return false;
+    
+    if (sb->free_inodes > sb->total_inodes)
+        return false;
+    
+    return true;
 }

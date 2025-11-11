@@ -16,4 +16,4 @@ int superblock_init(disk_t disk, struct superblock* sb, size_t total_blocks, siz
 void superblock_print(const struct superblock* sb);
 
 // checks magic number
-int is_superblock_valid(const struct superblock* sb);
+bool superblock_is_valid(const struct superblock* sb);
