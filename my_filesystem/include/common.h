@@ -48,16 +48,16 @@
 #include "config.h"
 
 // === SIZES AND COUNTS ===
-#define INODE_SIZE 128                                  // TODO: add a compile-time check that sizeof(struct inode) == INODE_SIZE
-#define INODES_PER_BLOCK (BLOCK_SIZE / INODE_SIZE)      // TODO: add a compile-time check that ((BLOCK_SIZE % INODE_SIZE) == 0
-#define DENTRY_SIZE 256
+#define INODE_SIZE         128                               
+#define INODES_PER_BLOCK   (BLOCK_SIZE / INODE_SIZE)
+#define DENTRY_SIZE        256
 #define DENTRIES_PER_BLOCK (BLOCK_SIZE / DENTRY_SIZE)                              
-#define MAX_PATH 1024
-#define MAGIC_NUMBER 0x12345678
+#define MAX_PATH           1024
+#define MAGIC_NUMBER       0x12345678
 
 // === RESERVED INODES ===
 #define INVALID_INODE_NUM 0     // reserved, never used
-#define ROOT_INODE_NUM 2        // root directory
+#define ROOT_INODE_NUM    2     // root directory
 
 // === FILE TYPES ===
 #define INODE_TYPE_FREE      0
@@ -141,6 +141,16 @@ struct dentry {
     uint8_t  file_type;         
     char     name[MAX_FILENAME];    // filename string
 } __attribute__((packed));
+
+// === COMPILE-TIME CHECKS ===
+_Static_assert(sizeof(struct inode) == INODE_SIZE, 
+               "struct inode must be exactly INODE_SIZE bytes");
+_Static_assert((BLOCK_SIZE % INODE_SIZE) == 0, 
+               "BLOCK_SIZE must be divisible by INODE_SIZE");
+_Static_assert(sizeof(struct dentry) == DENTRY_SIZE, 
+               "struct dentry must be exactly DENTRY_SIZE bytes");
+_Static_assert((BLOCK_SIZE % DENTRY_SIZE) == 0, 
+               "BLOCK_SIZE must be divisible by DENTRY_SIZE");
 
 // === USEFUL MACROS ===
 #define ALIGN_TO_BLOCK(size) (((size) + BLOCK_SIZE - 1) & ~(BLOCK_SIZE - 1))    // rounds size up to the next multiple of 512
