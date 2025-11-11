@@ -206,21 +206,21 @@ int disk_write(disk_t disk, off_t offset, const void* buffer, size_t size) {
     return DISK_SUCCESS;
 }
 
-int disk_get_size(disk_t disk) {
+size_t disk_get_size(disk_t disk) {
     if (!disk_is_attached(disk)) {
         return DISK_ERROR_NOT_ATTACHED;
     }
     return (int)disk->size;
 }
 
-int disk_get_blocks(disk_t disk) {
+size_t disk_get_blocks(disk_t disk) {
     if (!disk_is_attached(disk)) {
         return DISK_ERROR_NOT_ATTACHED;
     }
     return disk->block_count;
 }
 
-int disk_get_block_size(disk_t disk) {
+size_t disk_get_block_size(disk_t disk) {
     if (!disk_is_attached(disk)) {
         return DISK_ERROR_NOT_ATTACHED;
     }

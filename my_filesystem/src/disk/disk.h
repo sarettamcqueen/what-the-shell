@@ -33,9 +33,9 @@ int disk_read(disk_t disk, off_t offset, void* buffer, size_t size);
 int disk_write(disk_t disk, off_t offset, const void* buffer, size_t size);
 
 // status and info management
-int disk_get_size(disk_t disk);
-int disk_get_blocks(disk_t disk);
-int disk_get_block_size(disk_t disk);
+size_t disk_get_size(disk_t disk);
+size_t disk_get_blocks(disk_t disk);
+size_t disk_get_block_size(disk_t disk);
 bool disk_is_attached(disk_t disk);
 const char* disk_get_filename(disk_t disk);
 
