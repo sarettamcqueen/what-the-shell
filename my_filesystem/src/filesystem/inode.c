@@ -1,4 +1,5 @@
 #include "inode.h"
+#include "superblock.h"
 #include <stdio.h>
 #include <string.h>
 
