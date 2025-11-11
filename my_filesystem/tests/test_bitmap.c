@@ -117,6 +117,6 @@ int main() {
     test_count();
     test_range_operations();
     
-    printf("\nAll tests pass!\n");
+    printf("\nAll bitmap tests pass!\n");
     return 0;
 }

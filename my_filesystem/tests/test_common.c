@@ -39,6 +39,6 @@ int main() {
     assert(MAGIC_NUMBER == 0x12345678);
     printf("Constants are correct\n");
     
-    printf("\nAll tests pass!\n");
+    printf("\nAll common tests pass!\n");
     return 0;
 }

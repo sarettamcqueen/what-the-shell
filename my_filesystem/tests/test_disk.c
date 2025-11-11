@@ -1,5 +1,5 @@
 /* 
-    Temporary test for disk module
+    Test for disk module
 */
 
 #include "disk.h"
@@ -40,6 +40,6 @@ int main() {
     
     assert(disk_detach(disk) == DISK_SUCCESS);
     
-    printf("\nAll tests pass!\n");
+    printf("\nAll disk tests pass!\n");
     return 0;
 }
