@@ -167,7 +167,7 @@ int bitmap_clear_range(struct bitmap* bmp, size_t start, size_t count) {
 // === SEARCH OPERATIONS ===
 
 int bitmap_find_first_free(const struct bitmap* bmp) {
-    return bitmap_find_next_free(bmp, 0);
+    return bitmap_find_next_free(bmp, 1);  // skips bit 0 (block 0 is superblock and inode 0 is reserved)
 }
 
 int bitmap_find_next_free(const struct bitmap* bmp, size_t start_from) {
