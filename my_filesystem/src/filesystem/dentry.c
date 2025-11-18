@@ -142,17 +142,16 @@ bool dentry_is_valid_name(const char* name) {
     if (strchr(name, '/') != NULL) 
         return false;
     
-    // check reserved names
-    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) 
-        return false;
+    // "." and ".." are not forbidden filenames: we need them for directory naming.
     
     return true;
 }
 
 int dentry_create(const char* name, uint32_t inode_num, 
                   uint8_t file_type, struct dentry* out_dentry) {
-    if (!name || !out_dentry) 
+    if (!name || !out_dentry) {
         return ERROR_INVALID;
+    }
     
     if (!dentry_is_valid_name(name)) {
         memset(out_dentry, 0, sizeof(*out_dentry));
