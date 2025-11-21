@@ -57,7 +57,7 @@
 
 // === RESERVED INODES ===
 #define INVALID_INODE_NUM 0     // reserved, never used
-#define ROOT_INODE_NUM    2     // root directory
+#define ROOT_INODE_NUM    1     // root directory
 
 // === FILE TYPES ===
 #define INODE_TYPE_FREE      0

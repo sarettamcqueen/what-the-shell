@@ -68,7 +68,10 @@ int inode_write(disk_t disk, uint32_t inode_num, const struct inode* in_inode) {
 
 // allocates a free inode of the specified type and updates bitmap
 int inode_alloc(disk_t disk, struct bitmap* inode_bitmap, uint8_t type, uint16_t permissions,
-                struct inode* out_inode, uint32_t* out_inode_num) {          
+                struct inode* out_inode, uint32_t* out_inode_num) {     
+
+    printf("[DEBUG inode_alloc] allocating inode...\n");                
+
     int free_idx = bitmap_find_first_free(inode_bitmap);
     if (free_idx < 0) return ERROR_NO_SPACE;
     
@@ -100,12 +103,50 @@ int inode_alloc(disk_t disk, struct bitmap* inode_bitmap, uint8_t type, uint16_t
 }
 
 // frees an inode and updates bitmap
-int inode_free(disk_t disk, struct bitmap* inode_bitmap, uint32_t inode_num) {
+int inode_free(disk_t disk, struct bitmap* inode_bitmap, struct bitmap* block_bitmap,
+                uint32_t inode_num, uint32_t* out_num_freed_blocks) {
+    uint32_t freed_blocks = 0;
+    struct inode inode;
+    if (inode_read(disk, inode_num, &inode) != SUCCESS) {
+        return ERROR_IO;
+    }
+
+    // free direct blocks
+    for (int i = 0; i < 12; i++) {
+        if (inode.direct[i] != 0) {
+            bitmap_clear(block_bitmap, inode.direct[i]);
+            freed_blocks++;
+        }
+    }
+
+    // free indirect blocks
+    if (inode.indirect != 0) {
+        char indirect_buffer[BLOCK_SIZE];
+        if (disk_read_block(disk, inode.indirect, indirect_buffer) != DISK_SUCCESS) {
+            return ERROR_IO;
+        }
+        uint32_t* block_ptrs = (uint32_t*)indirect_buffer;
+        for (uint32_t i = 0; i < BLOCK_SIZE / sizeof(uint32_t); i++) {
+            if (block_ptrs[i] != 0) {
+                bitmap_clear(block_bitmap, block_ptrs[i]);
+                freed_blocks++;
+            }
+        }
+        bitmap_clear(block_bitmap, inode.indirect);
+        freed_blocks++;
+    }
+
     bitmap_clear(inode_bitmap, inode_num);
 
     struct inode zero_inode = {0};
     zero_inode.type = INODE_TYPE_FREE;
-    if (inode_write(disk, inode_num, &zero_inode) != SUCCESS) return ERROR_IO;
+    if (inode_write(disk, inode_num, &zero_inode) != SUCCESS) {
+        return ERROR_IO;
+    }
+
+    if (out_num_freed_blocks != NULL) {
+        *out_num_freed_blocks = freed_blocks;
+    }
 
     return SUCCESS;
 }

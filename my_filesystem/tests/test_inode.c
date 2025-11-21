@@ -121,23 +121,90 @@ void test_inode_free() {
     superblock_write(disk, &sb);
     
     struct bitmap* inode_bmp = bitmap_create(256);
+    struct bitmap* block_bmp = bitmap_create(2048);
     
-    // allocate
+    // allocate an inode
     struct inode in;
     uint32_t inode_num;
     inode_alloc(disk, inode_bmp, INODE_TYPE_FILE, 0644, &in, &inode_num);
     assert(bitmap_get(inode_bmp, inode_num) == true);
     
-    // free
-    assert(inode_free(disk, inode_bmp, inode_num) == SUCCESS);
+    // verify initial state
+    struct inode in_alloc;
+    inode_read(disk, inode_num, &in_alloc);
+    assert(in_alloc.type == INODE_TYPE_FILE);
+    
+    // free the inode and track blocks freed
+    uint32_t freed_blocks = 0;
+    assert(inode_free(disk, inode_bmp, block_bmp, inode_num, &freed_blocks) == SUCCESS);
+    
+    // verify inode bitmap is updated
     assert(bitmap_get(inode_bmp, inode_num) == false);
+
+    // update superblock tracking free inodes and blocks
+    sb.free_inodes++;
+    sb.free_blocks += freed_blocks;
+    superblock_write(disk, &sb);
     
-    // verify inode is zeroed
-    struct inode in_check;
-    inode_read(disk, inode_num, &in_check);
-    assert(in_check.type == INODE_TYPE_FREE);
+    // verify inode is zeroed on disk
+    struct inode in_freed;
+    inode_read(disk, inode_num, &in_freed);
+    assert(in_freed.type == INODE_TYPE_FREE);
     
+    // verify freed blocks count (should be 0 for newly allocated inode with no data)
+    assert(freed_blocks == 0);
+    
+    // cleanup
     bitmap_destroy(inode_bmp);
+    bitmap_destroy(block_bmp);
+    disk_detach(disk);
+    printf("OK\n");
+}
+
+void test_inode_free_with_blocks() {
+    printf("Test: inode free with data blocks... ");
+    
+    disk_t disk;
+    disk_attach("test_inode4.img", 1024*1024, true, &disk);
+
+    struct superblock sb;
+    superblock_init(disk, &sb, 2048, 256);
+    superblock_write(disk, &sb);
+    
+    struct bitmap* inode_bmp = bitmap_create(256);
+    struct bitmap* block_bmp = bitmap_create(2048);
+    
+    // allocate an inode
+    struct inode in;
+    uint32_t inode_num;
+    inode_alloc(disk, inode_bmp, INODE_TYPE_FILE, 0644, &in, &inode_num);
+    
+    // manually allocate some direct blocks to the inode
+    for (int i = 0; i < 3; i++) {
+        in.direct[i] = 100 + i;  // Assume blocks 100, 101, 102
+        bitmap_set(block_bmp, 100 + i);
+    }
+    inode_write(disk, inode_num, &in);
+    
+    // free the inode
+    uint32_t freed_blocks = 0;
+    assert(inode_free(disk, inode_bmp, block_bmp, inode_num, &freed_blocks) == SUCCESS);
+    
+    // verify 3 data blocks were freed
+    assert(freed_blocks == 3);
+    
+    // verify blocks are now free in bitmap
+    for (int i = 0; i < 3; i++) {
+        assert(bitmap_get(block_bmp, 100 + i) == false);
+    }
+
+    sb.free_inodes++;
+    sb.free_blocks += freed_blocks;
+    superblock_write(disk, &sb);
+    
+    // cleanup
+    bitmap_destroy(inode_bmp);
+    bitmap_destroy(block_bmp);
     disk_detach(disk);
     printf("OK\n");
 }
@@ -210,6 +277,7 @@ int main() {
     test_inode_zero_reserved();
     test_inode_read_write();
     test_inode_free();
+    test_inode_free_with_blocks();
     test_inode_multiple_allocations();
     test_inode_persistence();
     
