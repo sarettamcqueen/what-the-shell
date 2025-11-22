@@ -68,9 +68,7 @@ int inode_write(disk_t disk, uint32_t inode_num, const struct inode* in_inode) {
 
 // allocates a free inode of the specified type and updates bitmap
 int inode_alloc(disk_t disk, struct bitmap* inode_bitmap, uint8_t type, uint16_t permissions,
-                struct inode* out_inode, uint32_t* out_inode_num) {     
-
-    printf("[DEBUG inode_alloc] allocating inode...\n");                
+                struct inode* out_inode, uint32_t* out_inode_num) {                 
 
     int free_idx = bitmap_find_first_free(inode_bitmap);
     if (free_idx < 0) return ERROR_NO_SPACE;

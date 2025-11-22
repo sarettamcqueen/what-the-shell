@@ -1068,6 +1068,7 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
         goto cleanup_remove_parent_dentry;
     }
     new_dir_inode.links_count = 2;
+    new_dir_inode.modified_time = time(NULL);
     if (inode_write(fs->disk, new_dir_inode_num, &new_dir_inode) != SUCCESS) {
         status = ERROR_IO;
         goto cleanup_remove_parent_dentry;
@@ -1080,6 +1081,7 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
         goto cleanup_remove_parent_dentry;
     }
     parent_inode.links_count++;
+    parent_inode.modified_time = time(NULL);
     if (inode_write(fs->disk, parent_inode_num, &parent_inode) != SUCCESS) {
         status = ERROR_IO;
         goto cleanup_remove_parent_dentry;
@@ -1222,6 +1224,7 @@ int fs_rmdir(filesystem_t* fs, const char* path) {
         return ERROR_IO;
     }
     parent_inode.links_count--;
+    parent_inode.modified_time = time(NULL);
     if (inode_write(fs->disk, parent_inode_num, &parent_inode) != SUCCESS) {
         return ERROR_IO;
     }

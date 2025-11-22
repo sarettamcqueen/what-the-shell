@@ -38,6 +38,10 @@ INODE_OBJ = $(BUILDDIR)/inode.o
 DENTRY_SRC = $(SRCDIR)/filesystem/dentry.c
 DENTRY_OBJ = $(BUILDDIR)/dentry.o
 
+# fs module
+FS_SRC = $(SRCDIR)/filesystem/fs.c
+FS_OBJ = $(BUILDDIR)/fs.o
+
 # === TEST BINARIES ===
 
 TEST_DISK_SRC = $(TESTDIR)/test_disk.c
@@ -61,11 +65,14 @@ TEST_DENTRY_BIN = $(BUILDDIR)/test_dentry
 TEST_PATH_SRC = $(TESTDIR)/test_path.c
 TEST_PATH_BIN = $(BUILDDIR)/test_path
 
+TEST_FS_SRC = $(TESTDIR)/test_fs.c
+TEST_FS_BIN = $(BUILDDIR)/test_fs
+
 # === ALL TESTS ===
 
 ALL_TESTS = $(TEST_DISK_BIN) $(TEST_COMMON_BIN) $(TEST_BITMAP_BIN) \
             $(TEST_SUPERBLOCK_BIN) $(TEST_INODE_BIN) $(TEST_DENTRY_BIN) \
-            $(TEST_PATH_BIN)
+            $(TEST_PATH_BIN) $(TEST_FS_BIN)
 
 # === DEFAULT TARGET ===
 
@@ -116,6 +123,9 @@ test_dentry: dirs $(TEST_DENTRY_BIN)
 test_path: dirs $(TEST_PATH_BIN)
 	@./$(TEST_PATH_BIN)
 
+test_fs: dirs $(TEST_FS_BIN)
+	@./$(TEST_FS_BIN)
+
 # === DIRECTORY CREATION ===
 
 dirs:
@@ -151,6 +161,10 @@ $(DENTRY_OBJ): $(DENTRY_SRC) $(SRCDIR)/filesystem/dentry.h $(SRCDIR)/filesystem/
 	@echo "Compiling dentry module..."
 	@$(CC) $(CFLAGS) -I$(SRCDIR)/filesystem -I$(SRCDIR)/utils -I$(SRCDIR)/disk -c $< -o $@
 
+$(FS_OBJ): $(FS_SRC) $(SRCDIR)/filesystem/fs.h $(COMMON_HEADERS)
+	@echo "Compiling fs module..."
+	@$(CC) $(CFLAGS) -I$(SRCDIR)/filesystem -I$(SRCDIR)/utils -I$(SRCDIR)/disk -c $< -o $@
+
 # === LINK TEST BINARIES ===
 
 $(TEST_DISK_BIN): $(DISK_OBJ) $(TEST_DISK_SRC)
@@ -184,6 +198,14 @@ $(TEST_PATH_BIN): $(PATH_OBJ) $(COMMON_OBJ) $(TEST_PATH_SRC)
 	@echo "Building test_path..."
 	@$(CC) $(CFLAGS) -I$(SRCDIR)/utils $(TEST_PATH_SRC) $(PATH_OBJ) $(COMMON_OBJ) -o $@
 
+$(TEST_FS_BIN): $(FS_OBJ) $(DISK_OBJ) $(COMMON_OBJ) $(BITMAP_OBJ) \
+                $(INODE_OBJ) $(DENTRY_OBJ) $(PATH_OBJ) $(SUPERBLOCK_OBJ) \
+                $(TEST_FS_SRC)
+	@echo "Building test_fs..."
+	@$(CC) $(CFLAGS) -I$(SRCDIR)/filesystem -I$(SRCDIR)/utils -I$(SRCDIR)/disk \
+		$(TEST_FS_SRC) $(FS_OBJ) $(DISK_OBJ) $(COMMON_OBJ) $(BITMAP_OBJ) \
+		$(INODE_OBJ) $(DENTRY_OBJ) $(PATH_OBJ) $(SUPERBLOCK_OBJ) -o $@
+
 # === CLEANUP ===
 
 clean:
@@ -194,15 +216,16 @@ clean:
 
 help:
 	@echo "Available targets:"
-	@echo "  make                - Build and run all tests"
-	@echo "  make test_disk      - Run disk tests only"
-	@echo "  make test_common    - Run common tests only"
-	@echo "  make test_bitmap    - Run bitmap tests only"
-	@echo "  make test_superblock - Run superblock tests only"
-	@echo "  make test_inode     - Run inode tests only"
-	@echo "  make test_dentry    - Run dentry tests only"
-	@echo "  make test_path      - Run path tests only"
-	@echo "  make clean          - Clean build files"
-	@echo "  make help           - Show this help"
+	@echo "  make                	- Build and run all tests"
+	@echo "  make test_disk      	- Run disk tests only"
+	@echo "  make test_common    	- Run common tests only"
+	@echo "  make test_bitmap    	- Run bitmap tests only"
+	@echo "  make test_superblock 	- Run superblock tests only"
+	@echo "  make test_inode     	- Run inode tests only"
+	@echo "  make test_dentry    	- Run dentry tests only"
+	@echo "  make test_path      	- Run path tests only"
+	@echo "	 make test_fs			- Run fs tests only"
+	@echo "  make clean          	- Clean build files"
+	@echo "  make help           	- Show this help"
 
 .PHONY: all test_disk test_common test_bitmap test_superblock test_inode test_dentry test_path clean dirs help
