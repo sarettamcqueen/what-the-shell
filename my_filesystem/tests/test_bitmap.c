@@ -13,7 +13,7 @@ void test_create_destroy() {
     assert(bmp != NULL);
     assert(bitmap_count_free(bmp) == 100);
     
-    bitmap_destroy(bmp);
+    bitmap_destroy(&bmp);
     printf("OK\n");
 }
 
@@ -41,7 +41,7 @@ void test_set_clear_get() {
     bitmap_clear(bmp, 10);
     assert(!bitmap_get(bmp, 10));
     
-    bitmap_destroy(bmp);
+    bitmap_destroy(&bmp);
     printf("OK\n");
 }
 
@@ -63,7 +63,7 @@ void test_find_operations() {
     int next_free = bitmap_find_next_free(bmp, 6);
     assert(next_free == 6);
     
-    bitmap_destroy(bmp);
+    bitmap_destroy(&bmp);
     printf("OK\n");
 }
 
@@ -82,7 +82,7 @@ void test_count() {
     assert(bitmap_count_free(bmp) == 97);
     assert(bitmap_count_used(bmp) == 3);
     
-    bitmap_destroy(bmp);
+    bitmap_destroy(&bmp);
     printf("OK\n");
 }
 
@@ -104,7 +104,7 @@ void test_range_operations() {
         assert(!bitmap_get(bmp, i));
     }
     
-    bitmap_destroy(bmp);
+    bitmap_destroy(&bmp);
     printf("OK\n");
 }
 

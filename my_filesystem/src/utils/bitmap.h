@@ -15,7 +15,7 @@ struct bitmap {
 
 // initialization and cleanup
 struct bitmap* bitmap_create(size_t num_bits);
-void bitmap_destroy(struct bitmap* bmp);
+void bitmap_destroy(struct bitmap** bmp);
 int bitmap_init_from_memory(struct bitmap* bmp, void* memory, size_t num_bits);
 
 // bit operations

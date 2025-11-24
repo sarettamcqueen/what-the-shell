@@ -39,15 +39,16 @@ struct bitmap* bitmap_create(size_t num_bits) {
     return bmp;
 }
 
-void bitmap_destroy(struct bitmap* bmp) {
-    if (!bmp) {
+void bitmap_destroy(struct bitmap** bmp) {
+    if (!bmp || !(*bmp)) {
         return;
     }
     
-    if (bmp->data) {
-        free(bmp->data);
+    if ((*bmp)->data) {
+        free((*bmp)->data);
     }
-    free(bmp);
+    free(*bmp);
+    *bmp = NULL;
 }
 
 int bitmap_init_from_memory(struct bitmap* bmp, void* memory, size_t num_bits) {

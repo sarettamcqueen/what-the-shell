@@ -89,8 +89,8 @@ void test_dentry_find() {
     // find non-existing
     assert(dentry_find(disk, dir_inode_num, "nonexistent", &found, NULL) == ERROR_NOT_FOUND);
     
-    bitmap_destroy(inode_bmp);
-    bitmap_destroy(block_bmp);
+    bitmap_destroy(&inode_bmp);
+    bitmap_destroy(&block_bmp);
     disk_detach(disk);
     printf("OK\n");
 }
@@ -135,8 +135,8 @@ void test_dentry_add() {
     assert(dentry_find(disk, dir_inode_num, "newfile.txt", &found, NULL) == SUCCESS);
     assert(found.inode_num == 20);
     
-    bitmap_destroy(inode_bmp);
-    bitmap_destroy(block_bmp);
+    bitmap_destroy(&inode_bmp);
+    bitmap_destroy(&block_bmp);
     disk_detach(disk);
     printf("OK\n");
 }
@@ -181,8 +181,8 @@ void test_dentry_remove() {
     // verify file2 still exists
     assert(dentry_find(disk, dir_inode_num, "file2.txt", NULL, NULL) == SUCCESS);
     
-    bitmap_destroy(inode_bmp);
-    bitmap_destroy(block_bmp);
+    bitmap_destroy(&inode_bmp);
+    bitmap_destroy(&block_bmp);
     disk_detach(disk);
     printf("OK\n");
 }
@@ -235,8 +235,8 @@ void test_dentry_list() {
     assert(found1 && found2);
     
     free(list);
-    bitmap_destroy(inode_bmp);
-    bitmap_destroy(block_bmp);
+    bitmap_destroy(&inode_bmp);
+    bitmap_destroy(&block_bmp);
     disk_detach(disk);
     printf("OK\n");
 }

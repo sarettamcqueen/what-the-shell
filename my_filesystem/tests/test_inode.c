@@ -39,7 +39,7 @@ void test_inode_alloc() {
     assert(bitmap_get(inode_bmp, inode_num) == true);
     assert(bitmap_get(inode_bmp, 0) == true);  // 0 doesn't change
     
-    bitmap_destroy(inode_bmp);
+    bitmap_destroy(&inode_bmp);
     disk_detach(disk);
     printf("OK\n");
 }
@@ -72,7 +72,7 @@ void test_inode_zero_reserved() {
     
     assert(bitmap_get(inode_bmp, 0) == true);
     
-    bitmap_destroy(inode_bmp);
+    bitmap_destroy(&inode_bmp);
     disk_detach(disk);
     printf("OK\n");
 }
@@ -155,8 +155,8 @@ void test_inode_free() {
     assert(freed_blocks == 0);
     
     // cleanup
-    bitmap_destroy(inode_bmp);
-    bitmap_destroy(block_bmp);
+    bitmap_destroy(&inode_bmp);
+    bitmap_destroy(&block_bmp);
     disk_detach(disk);
     printf("OK\n");
 }
@@ -203,8 +203,8 @@ void test_inode_free_with_blocks() {
     superblock_write(disk, &sb);
     
     // cleanup
-    bitmap_destroy(inode_bmp);
-    bitmap_destroy(block_bmp);
+    bitmap_destroy(&inode_bmp);
+    bitmap_destroy(&block_bmp);
     disk_detach(disk);
     printf("OK\n");
 }
@@ -232,7 +232,7 @@ void test_inode_multiple_allocations() {
     
     assert(bitmap_count_used(inode_bmp) == 11);  // 0 reserved + 10 allocated
     
-    bitmap_destroy(inode_bmp);
+    bitmap_destroy(&inode_bmp);
     disk_detach(disk);
     printf("OK\n");
 }
