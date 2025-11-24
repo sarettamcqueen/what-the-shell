@@ -248,8 +248,8 @@ static int load_bitmaps(filesystem_t* fs) {
     fs->inode_bitmap = bitmap_create(inode_bitmap_bits);
 
     if (!fs->block_bitmap || !fs->inode_bitmap) {
-        bitmap_destroy(fs->block_bitmap);
-        bitmap_destroy(fs->inode_bitmap);
+        bitmap_destroy(&fs->block_bitmap);
+        bitmap_destroy(&fs->inode_bitmap);
         return ERROR_GENERIC;
     }
 
@@ -257,8 +257,8 @@ static int load_bitmaps(filesystem_t* fs) {
     for (uint32_t i = 0; i < fs->sb.block_bitmap_blocks; i++) {
         char buffer[BLOCK_SIZE];
         if (disk_read_block(fs->disk, fs->sb.block_bitmap_start + i, buffer) != DISK_SUCCESS) {
-            bitmap_destroy(fs->block_bitmap);
-            bitmap_destroy(fs->inode_bitmap);
+            bitmap_destroy(&fs->block_bitmap);
+            bitmap_destroy(&fs->inode_bitmap);
             return ERROR_IO;
         }
         
@@ -274,8 +274,8 @@ static int load_bitmaps(filesystem_t* fs) {
     for (uint32_t i = 0; i < fs->sb.inode_bitmap_blocks; i++) {
         char buffer[BLOCK_SIZE];
         if (disk_read_block(fs->disk, fs->sb.inode_bitmap_start + i, buffer) != DISK_SUCCESS) {
-            bitmap_destroy(fs->block_bitmap);
-            bitmap_destroy(fs->inode_bitmap);
+            bitmap_destroy(&fs->block_bitmap);
+            bitmap_destroy(&fs->inode_bitmap);
             return ERROR_IO;
         }
         
@@ -570,8 +570,8 @@ cleanup_inode:
     }
 
 cleanup_bitmaps:
-    if (temp_fs.block_bitmap) bitmap_destroy(temp_fs.block_bitmap);
-    if (temp_fs.inode_bitmap) bitmap_destroy(temp_fs.inode_bitmap);
+    if (temp_fs.block_bitmap) bitmap_destroy(&temp_fs.block_bitmap);
+    if (temp_fs.inode_bitmap) bitmap_destroy(&temp_fs.inode_bitmap);
 
     return status;
 }
@@ -619,8 +619,8 @@ int fs_mount(disk_t disk, filesystem_t** out_fs) {
     
     // release memory if mount fails
     if (superblock_write(disk, &fs->sb) != SUCCESS) {
-        bitmap_destroy(fs->block_bitmap);
-        bitmap_destroy(fs->inode_bitmap);
+        bitmap_destroy(&fs->block_bitmap);
+        bitmap_destroy(&fs->inode_bitmap);
         free(fs);
         return ERROR_IO;
     }
@@ -654,10 +654,10 @@ int fs_unmount(filesystem_t* fs) {
 cleanup:
     // cleanup is always executed
     if (fs->block_bitmap) {
-        bitmap_destroy(fs->block_bitmap);
+        bitmap_destroy(&fs->block_bitmap);
     }
     if (fs->inode_bitmap) {
-        bitmap_destroy(fs->inode_bitmap);
+        bitmap_destroy(&fs->inode_bitmap);
     }
 
     fs->is_mounted = false;
@@ -833,7 +833,7 @@ int fs_write(open_file_t* file, const void* buffer, size_t size, size_t* bytes_w
         return ERROR_INVALID;
     }
 
-    // Check permissions
+    // check permissions
     if (!(file->flags & (FS_O_WRONLY | FS_O_RDWR))) {
         return ERROR_PERMISSION;
     }
@@ -843,7 +843,7 @@ int fs_write(open_file_t* file, const void* buffer, size_t size, size_t* bytes_w
     if (res == SUCCESS) {
         file->offset += *bytes_written;
         
-        // Save bitmaps if blocks were allocated
+        // save bitmaps if blocks were allocated
         save_bitmaps(file->fs);
         superblock_write(file->fs->disk, &file->fs->sb);
     }
@@ -855,6 +855,7 @@ int fs_seek(open_file_t* file, uint32_t offset) {
     if (!file) {
         return ERROR_INVALID;
     }
+    if (offset > file->inode.size) offset = file->inode.size;
 
     file->offset = offset;
     return SUCCESS;
@@ -1341,6 +1342,89 @@ int fs_list(filesystem_t* fs, const char* path, struct dentry** out_entries, uin
     }
 
     return dentry_list(fs->disk, inode_num, out_entries, out_count);
+}
+
+int fs_inode_to_path(filesystem_t* fs, uint32_t inode_num, char* out_path, size_t out_size) {
+    if (!fs || !out_path || out_size == 0)
+        return ERROR_INVALID;
+
+    if (inode_num == ROOT_INODE_NUM) {
+        // root is trivial
+        snprintf(out_path, out_size, "/");
+        return SUCCESS;
+    }
+
+    /*  
+        NOTE: we store intermediate path components here while climbing up the directory tree.
+        The maximum depth is set to 64: it is unlikely for a valid filesystem path to contain
+        more than 64 nested directories in normal usage.
+        If deeper directory hierarchies are required, this value can be safely increased.
+        Using a fixed-size array avoids dynamic allocations and simplifies error handling.
+    */
+    char components[64][MAX_FILENAME];
+    int depth = 0;
+
+    uint32_t current = inode_num;
+
+    while (current != ROOT_INODE_NUM) {
+        // read parent
+        struct dentry parent;
+        if (dentry_find(fs->disk, current, "..", &parent, NULL) != SUCCESS)
+            return ERROR_IO;
+
+        uint32_t parent_inode = parent.inode_num;
+
+        // find name of "current" inside parent directory
+        uint32_t count = 0;
+        struct dentry* list = NULL;
+
+        if (dentry_list(fs->disk, parent_inode, &list, &count) != SUCCESS)
+            return ERROR_IO;
+
+        int found = 0;
+        for (uint32_t i = 0; i < count; i++) {
+            // skip . and ..
+            if (strcmp(list[i].name, ".") == 0 || strcmp(list[i].name, "..") == 0)
+                continue;
+
+            if (list[i].inode_num == current) {
+                strncpy(components[depth], list[i].name, MAX_FILENAME);
+                components[depth][MAX_FILENAME-1] = '\0';
+                found = 1;
+                break;
+            }
+        }
+
+        free(list);
+
+        if (!found)
+            return ERROR_NOT_FOUND;
+
+        depth++;
+        current = parent_inode;
+    }
+
+    // rebuild full absolute path
+    size_t offset = 0;
+    out_path[0] = '\0';
+
+    for (int i = depth - 1; i >= 0; i--) {
+        size_t len = strlen(components[i]);
+        if (offset + len + 2 >= out_size)
+            return ERROR_NO_SPACE;
+
+        out_path[offset++] = '/';
+        memcpy(&out_path[offset], components[i], len);
+        offset += len;
+        out_path[offset] = '\0';
+    }
+
+    if (offset == 0) {
+        // should never happen, but fallback
+        snprintf(out_path, out_size, "/");
+    }
+
+    return SUCCESS;
 }
 
 int fs_stat(filesystem_t* fs, const char* path, struct inode* out_inode) {

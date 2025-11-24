@@ -206,6 +206,20 @@ int fs_link(filesystem_t* fs, const char* existing_path, const char* new_path);
  */
 int fs_list(filesystem_t* fs, const char* path, struct dentry** out_entries, uint32_t* out_count);
 
+/**
+ * Reconstructs the absolute filesystem path of a directory from its inode number.
+ * 
+ * @param fs The filesystem
+ * @param inode_num Inode number of the directory whose path is requested
+ * @param out_path Output buffer where the absolute path will be written
+ * @param out_size      Size of the output buffer in bytes
+ * @return SUCCESS or error code
+ * 
+ * @note This function only works for directories, as it relies on "." and ".."
+ *       entries to traverse upward. Behavior is undefined for regular files.
+ */
+int fs_inode_to_path(filesystem_t* fs, uint32_t inode_num, char* out_path, size_t out_size);
+
 // === FILE/DIRECTORY INFORMATION ===
 
 /**
