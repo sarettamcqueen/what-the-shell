@@ -32,7 +32,8 @@ A bottom-up approach is being followed for the incremental implementation of the
 ### In Progress
 - [ ] **Shell interface** (CLI for interacting with the filesystem)
 - [ ] **Full test suite** (unit + integration + stress tests)
-- [ ] **Time metadata correctness review** (access/modify/create timestamps)
 
 ### Planned
 - [ ] **Doxygen documentation** for entire codebase
+- [ ] **Structural refactoring** of `fs.c` into smaller modules (that file is huge now)
+
