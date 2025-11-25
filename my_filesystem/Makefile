@@ -1,5 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -std=gnu99 -g -Iinclude
+CFLAGS += -fsanitize=address -g
+LDFLAGS += -fsanitize=address
 SRCDIR = src
 TESTDIR = tests
 BUILDDIR = build
@@ -41,6 +43,22 @@ DENTRY_OBJ = $(BUILDDIR)/dentry.o
 # fs module
 FS_SRC = $(SRCDIR)/filesystem/fs.c
 FS_OBJ = $(BUILDDIR)/fs.o
+
+# shell module
+SHELL_SRC = $(SRCDIR)/shell/shell.c
+SHELL_OBJ = $(BUILDDIR)/shell.o
+
+# commands module
+COMMANDS_SRC = $(SRCDIR)/shell/commands.c
+COMMANDS_OBJ = $(BUILDDIR)/commands.o
+
+# parser module
+PARSER_SRC = $(SRCDIR)/shell/parser.c
+PARSER_OBJ = $(BUILDDIR)/parser.o
+
+# main program
+MAIN_SRC = $(SRCDIR)/main.c
+MAIN_BIN = $(BUILDDIR)/my_filesystem
 
 # === TEST BINARIES ===
 
@@ -165,6 +183,18 @@ $(FS_OBJ): $(FS_SRC) $(SRCDIR)/filesystem/fs.h $(COMMON_HEADERS)
 	@echo "Compiling fs module..."
 	@$(CC) $(CFLAGS) -I$(SRCDIR)/filesystem -I$(SRCDIR)/utils -I$(SRCDIR)/disk -c $< -o $@
 
+$(SHELL_OBJ): $(SHELL_SRC) $(SRCDIR)/shell/shell.h
+	@echo "Compiling shell..."
+	@$(CC) $(CFLAGS) -I$(SRCDIR)/shell -I$(SRCDIR)/filesystem -I$(SRCDIR)/utils -I$(SRCDIR)/disk -c $< -o $@
+
+$(COMMANDS_OBJ): $(COMMANDS_SRC) $(SRCDIR)/shell/commands.h
+	@echo "Compiling commands..."
+	@$(CC) $(CFLAGS) -I$(SRCDIR)/shell -I$(SRCDIR)/filesystem -I$(SRCDIR)/utils -I$(SRCDIR)/disk -c $< -o $@
+
+$(PARSER_OBJ): $(PARSER_SRC) $(SRCDIR)/shell/parser.h
+	@echo "Compiling parser..."
+	@$(CC) $(CFLAGS) -I$(SRCDIR)/shell -c $< -o $@
+
 # === LINK TEST BINARIES ===
 
 $(TEST_DISK_BIN): $(DISK_OBJ) $(TEST_DISK_SRC)
@@ -206,6 +236,15 @@ $(TEST_FS_BIN): $(FS_OBJ) $(DISK_OBJ) $(COMMON_OBJ) $(BITMAP_OBJ) \
 		$(TEST_FS_SRC) $(FS_OBJ) $(DISK_OBJ) $(COMMON_OBJ) $(BITMAP_OBJ) \
 		$(INODE_OBJ) $(DENTRY_OBJ) $(PATH_OBJ) $(SUPERBLOCK_OBJ) -o $@
 
+$(MAIN_BIN): $(MAIN_SRC) $(SHELL_OBJ) $(COMMANDS_OBJ) $(PARSER_OBJ) \
+             $(FS_OBJ) $(INODE_OBJ) $(DENTRY_OBJ) $(SUPERBLOCK_OBJ) \
+             $(PATH_OBJ) $(BITMAP_OBJ) $(DISK_OBJ) $(COMMON_OBJ)
+	@echo "Building shell..."
+	@$(CC) $(CFLAGS) -I$(SRCDIR)/shell -I$(SRCDIR)/filesystem -I$(SRCDIR)/utils -I$(SRCDIR)/disk \
+		$(MAIN_SRC) $(SHELL_OBJ) $(COMMANDS_OBJ) $(PARSER_OBJ) \
+		$(FS_OBJ) $(INODE_OBJ) $(DENTRY_OBJ) $(SUPERBLOCK_OBJ) \
+		$(PATH_OBJ) $(BITMAP_OBJ) $(DISK_OBJ) $(COMMON_OBJ) -o $@
+
 # === CLEANUP ===
 
 clean:
@@ -227,5 +266,8 @@ help:
 	@echo "	 make test_fs			- Run fs tests only"
 	@echo "  make clean          	- Clean build files"
 	@echo "  make help           	- Show this help"
+
+run: $(MAIN_BIN)
+	./$(MAIN_BIN)
 
 .PHONY: all test_disk test_common test_bitmap test_superblock test_inode test_dentry test_path clean dirs help
