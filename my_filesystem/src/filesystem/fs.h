@@ -228,9 +228,10 @@ int fs_inode_to_path(filesystem_t* fs, uint32_t inode_num, char* out_path, size_
  * @param fs The filesystem
  * @param path Path to the file/directory
  * @param out_inode Pointer to receive inode data
+ * @param out_inode_num Pointer to receive inode number
  * @return SUCCESS or error code
  */
-int fs_stat(filesystem_t* fs, const char* path, struct inode* out_inode);
+int fs_stat(filesystem_t* fs, const char* path, struct inode* out_inode, uint32_t* out_inode_num);
 
 // === UTILITIES ===
 

@@ -70,7 +70,7 @@ int superblock_init(disk_t disk, struct superblock* sb, size_t total_blocks, siz
         return ERROR_NO_SPACE;  // not enough space for filesystem structures
     }
     sb->free_blocks = total_blocks - current_block;
-    sb->free_inodes = total_inodes - 1;  // -1 for root directory (inode 2)
+    sb->free_inodes = total_inodes - 1;  // inode 0 is not allocatable
     
     // === timestamps ===
     sb->created_time = time(NULL);

@@ -1427,7 +1427,7 @@ int fs_inode_to_path(filesystem_t* fs, uint32_t inode_num, char* out_path, size_
     return SUCCESS;
 }
 
-int fs_stat(filesystem_t* fs, const char* path, struct inode* out_inode) {
+int fs_stat(filesystem_t* fs, const char* path, struct inode* out_inode, uint32_t* out_inode_num) {
     if (!fs || !path || !out_inode) {
         return ERROR_INVALID;
     }
@@ -1441,7 +1441,11 @@ int fs_stat(filesystem_t* fs, const char* path, struct inode* out_inode) {
     int res = fs_path_to_inode(fs, path, &inode_num);
     if (res != SUCCESS) return res;
 
-    return inode_read(fs->disk, inode_num, out_inode);
+    res = inode_read(fs->disk, inode_num, out_inode);
+    if (res != SUCCESS) return res;
+
+    if (out_inode_num) *out_inode_num = inode_num;
+    return SUCCESS;
 }
 
 void fs_print_stats(filesystem_t* fs) {
