@@ -161,4 +161,3 @@ _Static_assert((BLOCK_SIZE % DENTRY_SIZE) == 0,
 // === USEFUL FUNCTION PROTOTYPES ===
 const char* error_string(int error_code);
 void print_timestamp(time_t timestamp);
-bool is_valid_filename(const char* filename);

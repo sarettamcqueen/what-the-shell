@@ -28,30 +28,3 @@ void print_timestamp(time_t timestamp) {
     strftime(buffer, 26, "%Y-%m-%d %H:%M:%S", tm_info);
     printf("%s", buffer);
 }
-
-bool is_valid_filename(const char* filename) {
-    if (!filename || *filename == '\0') {
-        return false;
-    }
-    
-    size_t len = strlen(filename);
-    if (len >= MAX_FILENAME) {
-        return false;
-    }
-    
-    if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0) {
-        return false;
-    }
-    
-    if (strchr(filename, '/')) {
-        return false;
-    }
-    
-    for (const char* p = filename; *p; p++) {
-        if (iscntrl(*p)) {
-            return false;
-        }
-    }
-    
-    return true;
-}
