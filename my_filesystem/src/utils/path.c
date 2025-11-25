@@ -222,27 +222,34 @@ bool path_is_valid(const char* path) {
 bool filename_is_valid(const char* filename) {
     if (!filename || filename[0] == '\0')
         return false;
-    
+
     size_t len = strlen(filename);
     if (len >= MAX_FILENAME)
         return false;
-    
-    // disallow "." and ".." as filenames (they're special)
-    if (strcmp(filename, CURRENT_DIR) == 0 || strcmp(filename, PARENT_DIR) == 0)
+
+    // disallow "." and ".."
+    if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0)
         return false;
-    
-    // disallow path separators in filename
-    if (strchr(filename, PATH_SEPARATOR) != NULL)
+
+    // disallow path separator
+    if (strchr(filename, '/') != NULL)
         return false;
-    
-    // check for invalid characters
+
+    // set of banned characters
+    const char* forbidden = "<>:\"'|?*";
+
     for (size_t i = 0; i < len; i++) {
-        char c = filename[i];
-        // disallow control characters and null
-        if (c == '\0' || (c > 0 && c < 32))
+        unsigned char c = filename[i];
+
+        // disallow control chars
+        if (c < 32)
+            return false;
+
+        // disallow characters in forbidden list
+        if (strchr(forbidden, c))
             return false;
     }
-    
+
     return true;
 }
 
