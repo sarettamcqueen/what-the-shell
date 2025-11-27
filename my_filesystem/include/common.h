@@ -6,12 +6,12 @@
   
    Contents:
     - Global constants:
-        - Sizes and counts (inode size, dentry size, entries per block)
+        - Sizes and counts
         - Magic number for filesystem validation
         - Path length limits
     - Reserved inodes and blocks:
         - Invalid inode marker (inode 0)
-        - Root directory inode (inode 2)
+        - Root directory inode (inode 1)
         - Superblock location (block 0)
     - Inode type definitions (free, file, directory)
     - Standard error codes
@@ -25,7 +25,6 @@
     - Function prototypes:
         - Error code to string conversion
         - Timestamp printing
-        - Filename validation
   
    All structures are marked with `__attribute__((packed))` to prevent
    automatic padding and ensure that their sizes align precisely with
@@ -33,8 +32,7 @@
    
    Design notes:
     - Inode 0 is reserved as an invalid marker (never allocated)
-    - Inode 1 is available for allocation (not reserved in this implementation)
-    - Inode 2 is the root directory (Unix standard convention)
+    - Inode 1 is the root directory (unlike Unix standard convention where inode 2 is root)
     - Block 0 always contains the superblock
  */
 
@@ -54,6 +52,13 @@
 #define DENTRIES_PER_BLOCK (BLOCK_SIZE / DENTRY_SIZE)                              
 #define MAX_PATH           1024
 #define MAGIC_NUMBER       0x12345678
+#define BYTES_PER_INODE    4096  // 1 inode every 4KB of disk space
+#define MIN_INODES         64    // for very small disks
+/*
+ * NOTE: MIN_INODES set to 64 means that the disk size must be at least 10240 bytes (= 20 blocks)
+ * since the inode table requires 16 blocks, and the superblock, the block bitmap, the inode bitmap, and the root inode
+ * each require 1 block. This filesystem does not work on disks smaller than 10 KiB!!!
+ */
 
 // === RESERVED INODES ===
 #define INVALID_INODE_NUM 0     // reserved, never used
