@@ -144,6 +144,9 @@ test_path: dirs $(TEST_PATH_BIN)
 test_fs: dirs $(TEST_FS_BIN)
 	@./$(TEST_FS_BIN)
 
+run: dirs $(MAIN_BIN)
+	./$(MAIN_BIN)
+
 # === DIRECTORY CREATION ===
 
 dirs:
@@ -266,8 +269,5 @@ help:
 	@echo "	 make test_fs			- Run fs tests only"
 	@echo "  make clean          	- Clean build files"
 	@echo "  make help           	- Show this help"
-
-run: $(MAIN_BIN)
-	./$(MAIN_BIN)
 
 .PHONY: all test_disk test_common test_bitmap test_superblock test_inode test_dentry test_path clean dirs help
