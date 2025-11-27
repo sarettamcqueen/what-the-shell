@@ -69,7 +69,7 @@ int shell_dispatch(filesystem_t** current_fs, int argc, char** argv) {
 
     if (strcmp(cmd, "help") == 0) {
         printf("Available commands:\n");
-        printf("  format <diskname> <blocks>\n");
+        printf("  format <diskname> <size_in_bytes>\n");
         printf("  mount <diskname>\n");
         printf("  unmount\n");
         printf("  pwd\n");

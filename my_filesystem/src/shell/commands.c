@@ -34,28 +34,56 @@ static const char* inode_type_to_string(uint8_t type) {
     }
 }
 
-// format <diskfile> <blocks> (used standalone, not inside mounted shell typically)
+// format <diskname> <size> (used standalone, not inside mounted shell typically)
 int cmd_format(int argc, char** argv) {
     if (argc != 3) {
-        printf("Usage: format <disk.img> <num_blocks>\n");
+        printf("Usage: format <diskname> <size_in_bytes>\n");
         return 0;
     }
 
     const char* filename = argv[1];
-    int blocks = atoi(argv[2]);
+    int input_size = atoi(argv[2]);
+
+    if (input_size <= 0) {
+        printf("format: invalid size '%s'\n", argv[2]);
+        return 0;
+    }
+
+    // ensure size is aligned to BLOCK_SIZE
+    int remainder = input_size % BLOCK_SIZE;
+    long long aligned_size = input_size;
+
+    if (remainder != 0) {
+        aligned_size = input_size + (BLOCK_SIZE - remainder);
+        printf("format: size %d is not aligned to 512 bytes, rounding up to %lld\n",
+               input_size, aligned_size);
+    }
 
     disk_t disk;
-    if (disk_attach(filename, blocks * BLOCK_SIZE, true, &disk) != DISK_SUCCESS) {
+    if (disk_attach(filename, aligned_size, true, &disk) != DISK_SUCCESS) {
         printf("format: cannot attach %s\n", filename);
         return 0;
     }
 
-    if (fs_format(disk, blocks, 256) != SUCCESS) {
+    // compute inode count using bytes-per-inode ratio
+    uint64_t total_bytes = (uint64_t)aligned_size;
+    uint32_t total_inodes = total_bytes / BYTES_PER_INODE;
+    uint32_t total_blocks = total_bytes / BLOCK_SIZE;
+
+    // round up to next multiple of INODES_PER_BLOCK
+    if (total_inodes % INODES_PER_BLOCK != 0) {
+        total_inodes += INODES_PER_BLOCK - (total_inodes % INODES_PER_BLOCK);
+    }
+
+    if (total_inodes < MIN_INODES) total_inodes = MIN_INODES;
+
+    if (fs_format(disk, total_blocks, total_inodes) != SUCCESS) {
         printf("format: failed to format '%s'\n", filename);
         disk_detach(disk);
         return 0;
     }
-    printf("Filesystem '%s' formatted (%d bytes)\n", filename, blocks * BLOCK_SIZE);
+     printf("Filesystem '%s' formatted (%lld bytes, %d blocks, %u inodes)\n",
+           filename, aligned_size, total_blocks, total_inodes);
 
     disk_detach(disk);
     return 0;
