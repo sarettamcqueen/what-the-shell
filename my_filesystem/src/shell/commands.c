@@ -230,16 +230,21 @@ int cmd_cat(filesystem_t* fs, int argc, char** argv) {
     }
 
     char buf[1024];
-    size_t read;
-    int ret = fs_read(f, buf, sizeof(buf) - 1, &read);
-    if (ret != SUCCESS) {
-        print_fs_error("cat", ret, argv[1]);
-        fs_close(f);
-        return 0;
+    size_t bytes_read = 0;
+
+    while (1) {
+        int ret = fs_read(f, buf, sizeof(buf) - 1, &bytes_read);
+        if (ret != SUCCESS) {
+            print_fs_error("cat", ret, argv[1]);
+            fs_close(f);
+            return 0;
+        }
+
+        if (bytes_read == 0) break;
+
+        fwrite(buf, 1, bytes_read, stdout);
     }
 
-    buf[read] = '\0';
-    printf("%s", buf);
     printf("\n");
 
     fs_close(f);
