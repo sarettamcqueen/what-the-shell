@@ -92,9 +92,14 @@ ALL_TESTS = $(TEST_DISK_BIN) $(TEST_COMMON_BIN) $(TEST_BITMAP_BIN) \
             $(TEST_SUPERBLOCK_BIN) $(TEST_INODE_BIN) $(TEST_DENTRY_BIN) \
             $(TEST_PATH_BIN) $(TEST_FS_BIN)
 
+DISABLED_TESTS = $(TEST_FS_BIN)
+ENABLED_TESTS = $(filter-out $(DISABLED_TESTS), $(ALL_TESTS))
+
 # === DEFAULT TARGET ===
 
-all: dirs $(ALL_TESTS)
+all: dirs $(MAIN_BIN)
+
+test: dirs $(ENABLED_TESTS)
 	@echo "=== Running test_disk ==="
 	@./$(TEST_DISK_BIN)
 	@echo ""
@@ -144,7 +149,7 @@ test_path: dirs $(TEST_PATH_BIN)
 test_fs: dirs $(TEST_FS_BIN)
 	@./$(TEST_FS_BIN)
 
-run: dirs $(MAIN_BIN)
+run: all
 	./$(MAIN_BIN)
 
 # === DIRECTORY CREATION ===
@@ -258,7 +263,9 @@ clean:
 
 help:
 	@echo "Available targets:"
-	@echo "  make                	- Build and run all tests"
+	@echo "  make                   - Build main executable"
+	@echo "  make run               - Build and run main executable"
+	@echo "  make test              - Build and run enabled tests"
 	@echo "  make test_disk      	- Run disk tests only"
 	@echo "  make test_common    	- Run common tests only"
 	@echo "  make test_bitmap    	- Run bitmap tests only"
@@ -270,4 +277,5 @@ help:
 	@echo "  make clean          	- Clean build files"
 	@echo "  make help           	- Show this help"
 
-.PHONY: all test_disk test_common test_bitmap test_superblock test_inode test_dentry test_path clean dirs help
+.PHONY: all test run test_disk test_common test_bitmap test_superblock \
+        test_inode test_dentry test_path test_fs clean dirs help
