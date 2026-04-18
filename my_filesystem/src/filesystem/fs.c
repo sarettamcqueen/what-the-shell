@@ -105,7 +105,9 @@ static int read_inode_data(filesystem_t* fs, const struct inode* inode,
  * Writes data to an inode's data blocks.
  * Allocates new blocks as needed.
  */
-static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inode_num,
+
+/*
+ static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inode_num,
                             uint32_t offset, const void* buffer, size_t size, size_t* bytes_written) {
     if (!fs || !inode || !buffer || !bytes_written) {
         return ERROR_INVALID;
@@ -232,6 +234,207 @@ static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inod
     }
 
     *bytes_written = size;
+    return SUCCESS;
+} */
+
+/**
+ * Writes data to an inode's data blocks.
+ * Allocates new blocks as needed.
+ */
+static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inode_num,
+                            uint32_t offset, const void* buffer, size_t size, size_t* bytes_written) {
+    if (!fs || !inode || !buffer || !bytes_written) {
+        return ERROR_INVALID;
+    }
+
+    *bytes_written = 0;
+
+    uint32_t start_block_idx = offset / BLOCK_SIZE;
+    uint32_t start_offset = offset % BLOCK_SIZE;
+    uint32_t remaining = size;
+    const uint8_t* buf_ptr = (const uint8_t*)buffer;
+
+    char block_buffer[BLOCK_SIZE];
+    bool inode_modified = false;
+
+    while (remaining > 0) {
+        uint32_t block_num = 0;
+        uint32_t* block_num_ptr = NULL;
+        bool needs_indirect_write = false;
+        char indirect_buffer[BLOCK_SIZE];
+
+        bool allocated_indirect_block = false;
+        uint32_t allocated_indirect_block_num = 0;
+
+        bool allocated_data_block = false;
+        uint32_t allocated_data_block_num = 0;
+
+        // determine which block to write
+        if (start_block_idx < 12) {
+            // direct block
+            block_num = inode->direct[start_block_idx];
+            block_num_ptr = &inode->direct[start_block_idx];
+        } else {
+            // indirect block
+            uint32_t indirect_idx = start_block_idx - 12;
+
+            if (indirect_idx >= BLOCK_SIZE / sizeof(uint32_t)) {
+                return ERROR_NO_SPACE;
+            }
+
+            if (inode->indirect == 0) {
+                // allocate indirect block
+                int new_block = bitmap_find_first_free(fs->block_bitmap);
+                if (new_block < 0) {
+                    return ERROR_NO_SPACE;
+                }
+
+                if (bitmap_set(fs->block_bitmap, new_block) != SUCCESS) {
+                    return ERROR_GENERIC;
+                }
+
+                fs->sb.free_blocks--;
+                inode->indirect = new_block;
+                inode->blocks_used++;
+                inode_modified = true;
+
+                allocated_indirect_block = true;
+                allocated_indirect_block_num = new_block;
+
+                // initialize indirect block with zeros
+                memset(indirect_buffer, 0, BLOCK_SIZE);
+                if (disk_write_block(fs->disk, new_block, indirect_buffer) != DISK_SUCCESS) {
+                    bitmap_clear(fs->block_bitmap, new_block);
+                    fs->sb.free_blocks++;
+                    inode->indirect = 0;
+                    inode->blocks_used--;
+                    return ERROR_IO;
+                }
+            }
+
+            // read indirect block
+            if (disk_read_block(fs->disk, inode->indirect, indirect_buffer) != DISK_SUCCESS) {
+                return ERROR_IO;
+            }
+
+            uint32_t* block_ptrs = (uint32_t*)indirect_buffer;
+            block_num = block_ptrs[indirect_idx];
+            block_num_ptr = &block_ptrs[indirect_idx];
+            needs_indirect_write = true;
+        }
+
+        // allocate block if needed
+        if (block_num == 0) {
+            int new_block = bitmap_find_first_free(fs->block_bitmap);
+            if (new_block < 0) {
+                // rollback an indirect block allocated in this iteration, if any
+                if (allocated_indirect_block) {
+                    bitmap_clear(fs->block_bitmap, allocated_indirect_block_num);
+                    fs->sb.free_blocks++;
+                    inode->indirect = 0;
+                    inode->blocks_used--;
+                }
+                return ERROR_NO_SPACE;
+            }
+
+            if (bitmap_set(fs->block_bitmap, new_block) != SUCCESS) {
+                if (allocated_indirect_block) {
+                    bitmap_clear(fs->block_bitmap, allocated_indirect_block_num);
+                    fs->sb.free_blocks++;
+                    inode->indirect = 0;
+                    inode->blocks_used--;
+                }
+                return ERROR_GENERIC;
+            }
+
+            fs->sb.free_blocks--;
+            block_num = new_block;
+            *block_num_ptr = new_block;
+            inode->blocks_used++;
+            inode_modified = true;
+
+            allocated_data_block = true;
+            allocated_data_block_num = new_block;
+
+            // Initialize with zeros
+            memset(block_buffer, 0, BLOCK_SIZE);
+
+            if (needs_indirect_write) {
+                if (disk_write_block(fs->disk, inode->indirect, indirect_buffer) != DISK_SUCCESS) {
+                    bitmap_clear(fs->block_bitmap, new_block);
+                    fs->sb.free_blocks++;
+                    *block_num_ptr = 0;
+                    inode->blocks_used--;
+
+                    if (allocated_indirect_block) {
+                        bitmap_clear(fs->block_bitmap, allocated_indirect_block_num);
+                        fs->sb.free_blocks++;
+                        inode->indirect = 0;
+                        inode->blocks_used--;
+                    }
+
+                    return ERROR_IO;
+                }
+            }
+        } else {
+            // read existing block if partial write
+            if (start_offset != 0 || remaining < BLOCK_SIZE) {
+                if (disk_read_block(fs->disk, block_num, block_buffer) != DISK_SUCCESS) {
+                    return ERROR_IO;
+                }
+            } else {
+                memset(block_buffer, 0, BLOCK_SIZE);
+            }
+        }
+
+        // write data to block buffer
+        uint32_t chunk = (remaining < BLOCK_SIZE - start_offset) ? remaining : (BLOCK_SIZE - start_offset);
+        memcpy(block_buffer + start_offset, buf_ptr, chunk);
+
+        // write block to disk
+        if (disk_write_block(fs->disk, block_num, block_buffer) != DISK_SUCCESS) {
+            if (allocated_data_block) {
+                bitmap_clear(fs->block_bitmap, allocated_data_block_num);
+                fs->sb.free_blocks++;
+                *block_num_ptr = 0;
+                inode->blocks_used--;
+            }
+
+            if (allocated_indirect_block) {
+                bitmap_clear(fs->block_bitmap, allocated_indirect_block_num);
+                fs->sb.free_blocks++;
+                inode->indirect = 0;
+                inode->blocks_used--;
+            }
+
+            return ERROR_IO;
+        }
+
+        buf_ptr += chunk;
+        remaining -= chunk;
+        *bytes_written += chunk;
+        start_block_idx++;
+        start_offset = 0;
+    }
+
+    // update inode size if needed
+    uint32_t end_pos = offset + size;
+    if (end_pos > inode->size) {
+        inode->size = end_pos;
+        inode_modified = true;
+    }
+
+    // update modification time
+    inode->modified_time = time(NULL);
+    inode_modified = true;
+
+    // write inode back to disk
+    if (inode_modified) {
+        if (inode_write(fs->disk, inode_num, inode) != SUCCESS) {
+            return ERROR_IO;
+        }
+    }
+
     return SUCCESS;
 }
 
@@ -533,12 +736,17 @@ int fs_format(disk_t disk, size_t total_blocks, size_t total_inodes) {
         goto cleanup_inode;
     }
 
-    // add entries to root directory's data block
-    res = dentry_add(disk, root_inode_num, &dot_dentry, temp_fs.block_bitmap);
-    if (res != SUCCESS) { status = res; goto cleanup_inode; }
+    uint32_t allocated_blocks = 0;
 
-    res = dentry_add(disk, root_inode_num, &dotdot_dentry, temp_fs.block_bitmap);
+    // add entries to root directory's data block
+    res = dentry_add(disk, root_inode_num, &dot_dentry, temp_fs.block_bitmap, &allocated_blocks);
     if (res != SUCCESS) { status = res; goto cleanup_inode; }
+    sb.free_blocks -= allocated_blocks;
+
+    allocated_blocks = 0;
+    res = dentry_add(disk, root_inode_num, &dotdot_dentry, temp_fs.block_bitmap, &allocated_blocks);
+    if (res != SUCCESS) { status = res; goto cleanup_inode; }
+    sb.free_blocks -= allocated_blocks;
 
     // set links_count for root and write inode back
     root_inode.links_count = 2;
@@ -833,22 +1041,31 @@ int fs_write(open_file_t* file, const void* buffer, size_t size, size_t* bytes_w
         return ERROR_INVALID;
     }
 
+    *bytes_written = 0;
+
     // check permissions
     if (!(file->flags & (FS_O_WRONLY | FS_O_RDWR))) {
         return ERROR_PERMISSION;
     }
 
     int res = write_inode_data(file->fs, &file->inode, file->inode_num,
-                                  file->offset, buffer, size, bytes_written);
-    if (res == SUCCESS) {
-        file->offset += *bytes_written;
-        
-        // save bitmaps if blocks were allocated
-        save_bitmaps(file->fs);
-        superblock_write(file->fs->disk, &file->fs->sb);
+                               file->offset, buffer, size, bytes_written);
+    if (res != SUCCESS) {
+        return res;
     }
 
-    return res;
+    //file->offset += *bytes_written;
+
+    // persist updated metadata
+    if (save_bitmaps(file->fs) != SUCCESS) {
+        return ERROR_IO;
+    }
+
+    if (superblock_write(file->fs->disk, &file->fs->sb) != SUCCESS) {
+        return ERROR_IO;
+    }
+
+    return SUCCESS;
 }
 
 int fs_seek(open_file_t* file, uint32_t offset) {
@@ -888,11 +1105,13 @@ int fs_create(filesystem_t* fs, const char* path, uint16_t permissions) {
         goto cleanup_inode;
     }
 
+    uint32_t allocated_blocks = 0;
     // add to parent directory
-    if (dentry_add(fs->disk, parent_inode_num, &new_dentry, fs->block_bitmap) != SUCCESS) {
+    if (dentry_add(fs->disk, parent_inode_num, &new_dentry, fs->block_bitmap, &allocated_blocks) != SUCCESS) {
         status = ERROR_IO;
         goto cleanup_inode;
     }
+    fs->sb.free_blocks -= allocated_blocks;
 
     // update inode
     new_inode.modified_time = time(NULL);
@@ -911,6 +1130,7 @@ int fs_create(filesystem_t* fs, const char* path, uint16_t permissions) {
 
     cleanup_remove_parent_dentry:
         dentry_remove(fs->disk, parent_inode_num, filename);
+        fs->sb.free_blocks += allocated_blocks;
 
     cleanup_inode:
         inode_free(fs->disk, fs->inode_bitmap, fs->block_bitmap, new_inode_num, NULL);
@@ -944,46 +1164,6 @@ int fs_unlink(filesystem_t* fs, const char* path) {
         return ERROR_INVALID;
     }
 
-    // decrement link count
-    inode.links_count--;
-
-    // free resources if links_count reaches 0
-    if (inode.links_count == 0) {
-        // free direct blocks
-        for (int i = 0; i < 12 && inode.direct[i] != 0; i++) {
-            bitmap_clear(fs->block_bitmap, inode.direct[i]);
-            fs->sb.free_blocks++;
-        }
-
-        // free indirect blocks
-        if (inode.indirect != 0) {
-            char indirect_buffer[BLOCK_SIZE];
-            if (disk_read_block(fs->disk, inode.indirect, indirect_buffer) != DISK_SUCCESS) {
-                return ERROR_IO;
-            }
-            uint32_t* block_ptrs = (uint32_t*)indirect_buffer;
-
-            for (uint32_t i = 0; i < BLOCK_SIZE / sizeof(uint32_t) && block_ptrs[i] != 0; i++) {
-                bitmap_clear(fs->block_bitmap, block_ptrs[i]);
-                fs->sb.free_blocks++;
-            }
-
-            bitmap_clear(fs->block_bitmap, inode.indirect);
-            fs->sb.free_blocks++;
-        }
-
-        // free inode
-        uint32_t freed_blocks = 0;
-        inode_free(fs->disk, fs->inode_bitmap, fs->block_bitmap, inode_num, &freed_blocks);
-        fs->sb.free_inodes++;
-        fs->sb.free_blocks += freed_blocks;
-    } else {
-        // update inode with decremented link count
-        if (inode_write(fs->disk, inode_num, &inode) != SUCCESS) {
-            return ERROR_IO;
-        }
-    }
-
     char* normalized = path_normalize(path);
     if (!normalized) {
         return ERROR_INVALID;
@@ -1001,8 +1181,29 @@ int fs_unlink(filesystem_t* fs, const char* path) {
     uint32_t parent_inode_num;
     res = fs_path_to_inode(fs, parent_path, &parent_inode_num);
     if (res != SUCCESS) return res;
+
     res = dentry_remove(fs->disk, parent_inode_num, filename);
     if (res != SUCCESS) return res;
+
+    // decrement link count
+    inode.links_count--;
+
+    // free resources if links_count reaches 0
+    if (inode.links_count == 0) {
+        uint32_t freed_blocks = 0;
+
+        if (inode_free(fs->disk, fs->inode_bitmap, fs->block_bitmap, inode_num, &freed_blocks) != SUCCESS) {
+            return ERROR_IO;
+        }
+
+        fs->sb.free_inodes++;
+        fs->sb.free_blocks += freed_blocks;
+    } else {
+        // update inode with decremented link count
+        if (inode_write(fs->disk, inode_num, &inode) != SUCCESS) {
+            return ERROR_IO;
+        }
+    }
 
     // save
     if (save_bitmaps(fs) != SUCCESS) return ERROR_IO;
@@ -1016,6 +1217,10 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
     char parent_path[MAX_PATH];
     char dirname[MAX_FILENAME];
     uint32_t parent_inode_num;
+
+    uint32_t parent_dentry_blocks = 0;
+    uint32_t dot_blocks = 0;
+    uint32_t dotdot_blocks = 0;
 
     int res = fs_prepare_create(fs, path, parent_path, dirname, &parent_inode_num);
     if (res != SUCCESS) return res;
@@ -1035,10 +1240,11 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
         goto cleanup_inode;
     }
 
-    if (dentry_add(fs->disk, parent_inode_num, &new_dentry, fs->block_bitmap) != SUCCESS) {
+    if (dentry_add(fs->disk, parent_inode_num, &new_dentry, fs->block_bitmap, &parent_dentry_blocks) != SUCCESS) {
         status = ERROR_IO;
         goto cleanup_inode;
     }
+    fs->sb.free_blocks -= parent_dentry_blocks;
 
     // add "." and ".." entries
     struct dentry dot, dotdot;
@@ -1048,20 +1254,22 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
         goto cleanup_remove_parent_dentry;
     }
 
-    if (dentry_add(fs->disk, new_dir_inode_num, &dot, fs->block_bitmap) != SUCCESS) {
+    if (dentry_add(fs->disk, new_dir_inode_num, &dot, fs->block_bitmap, &dot_blocks) != SUCCESS) {
         status = ERROR_IO;
         goto cleanup_remove_parent_dentry;
     }
+    fs->sb.free_blocks -= dot_blocks;
 
     if (dentry_create("..", parent_inode_num, INODE_TYPE_DIRECTORY, &dotdot) != SUCCESS) {
         status = ERROR_INVALID;
         goto cleanup_remove_parent_dentry;
     }
 
-    if (dentry_add(fs->disk, new_dir_inode_num, &dotdot, fs->block_bitmap) != SUCCESS) {
+    if (dentry_add(fs->disk, new_dir_inode_num, &dotdot, fs->block_bitmap, &dotdot_blocks) != SUCCESS) {
         status = ERROR_IO;
         goto cleanup_remove_parent_dentry;
     }
+    fs->sb.free_blocks -= dotdot_blocks;
 
     // update new directory link count (for "." reference)
     if (inode_read(fs->disk, new_dir_inode_num, &new_dir_inode) != SUCCESS) {
@@ -1099,16 +1307,19 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
     return SUCCESS;
 
     cleanup_revert_parent_link:
-        // revert parent link count increment
-        if (inode_read(fs->disk, parent_inode_num, &parent_inode) == SUCCESS) {
-            parent_inode.links_count--;
-            inode_write(fs->disk, parent_inode_num, &parent_inode);
-        }
+    // revert parent link count increment
+    if (inode_read(fs->disk, parent_inode_num, &parent_inode) == SUCCESS) {
+        parent_inode.links_count--;
+        inode_write(fs->disk, parent_inode_num, &parent_inode);
+    }
 
     cleanup_remove_parent_dentry:
         // remove dentry from parent directory (rollback)
         dentry_remove(fs->disk, parent_inode_num, dirname);
-        
+
+        // restore only blocks allocated in the parent directory
+        fs->sb.free_blocks += parent_dentry_blocks;
+
     cleanup_inode: {
         // free inode and its blocks
         uint32_t freed_blocks = 0;
@@ -1118,7 +1329,7 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
         superblock_write(fs->disk, &fs->sb);
         save_bitmaps(fs);
     }
-        
+
     return status;
 }
 
@@ -1127,35 +1338,30 @@ int fs_rmdir(filesystem_t* fs, const char* path) {
         return ERROR_INVALID;
     }
 
-    // validate path
     if (!path_is_valid(path)) {
         return ERROR_INVALID;
     }
 
-    // can't remove root
     if (path_is_root(path)) {
         return ERROR_INVALID;
     }
 
-    // resolve
     uint32_t target_inode_num;
     int res = fs_path_to_inode(fs, path, &target_inode_num);
     if (res != SUCCESS) return res;
 
-    // read inode
     struct inode target_inode;
     if (inode_read(fs->disk, target_inode_num, &target_inode) != SUCCESS) {
         return ERROR_IO;
     }
 
-    // must be directory
     if (target_inode.type != INODE_TYPE_DIRECTORY) {
         return ERROR_INVALID;
     }
 
-    // check if empty (only . and .. should exist)
-    struct dentry* entries;
-    uint32_t count;
+    // check if empty (only . and .. allowed)
+    struct dentry* entries = NULL;
+    uint32_t count = 0;
     if (dentry_list(fs->disk, target_inode_num, &entries, &count) != SUCCESS) {
         return ERROR_IO;
     }
@@ -1169,29 +1375,7 @@ int fs_rmdir(filesystem_t* fs, const char* path) {
     free(entries);
 
     if (non_special > 0) {
-        return ERROR_GENERIC;  // not empty
-    }
-
-    // free data blocks (direct)
-    for (int i = 0; i < 12 && target_inode.direct[i] != 0; i++) {
-        bitmap_clear(fs->block_bitmap, target_inode.direct[i]);
-        fs->sb.free_blocks++;
-    }
-
-    // free indirect blocks
-    if (target_inode.indirect != 0) {
-        char indirect_buffer[BLOCK_SIZE];
-        if (disk_read_block(fs->disk, target_inode.indirect, indirect_buffer) == DISK_SUCCESS) {
-            uint32_t* block_ptrs = (uint32_t*)indirect_buffer;
-            for (uint32_t i = 0; i < BLOCK_SIZE / sizeof(uint32_t); i++) {
-                if (block_ptrs[i] != 0) {
-                    bitmap_clear(fs->block_bitmap, block_ptrs[i]);
-                    fs->sb.free_blocks++;
-                }
-            }
-        }
-        bitmap_clear(fs->block_bitmap, target_inode.indirect);
-        fs->sb.free_blocks++;
+        return ERROR_GENERIC;
     }
 
     char* normalized = path_normalize(path);
@@ -1207,32 +1391,44 @@ int fs_rmdir(filesystem_t* fs, const char* path) {
     }
     free(normalized);
 
-    // free inode
-    uint32_t freed_blocks = 0;
-    inode_free(fs->disk, fs->inode_bitmap, fs->block_bitmap, target_inode_num, &freed_blocks);
-    fs->sb.free_inodes++;
-    fs->sb.free_blocks += freed_blocks;
-
-    // remove from parent
     uint32_t parent_inode_num;
     res = fs_path_to_inode(fs, parent_path, &parent_inode_num);
     if (res != SUCCESS) return res;
-    dentry_remove(fs->disk, parent_inode_num, dirname);
+
+    // remove from parent directory
+    res = dentry_remove(fs->disk, parent_inode_num, dirname);
+    if (res != SUCCESS) return res;
 
     // decrement parent link count
     struct inode parent_inode;
     if (inode_read(fs->disk, parent_inode_num, &parent_inode) != SUCCESS) {
         return ERROR_IO;
     }
+
     parent_inode.links_count--;
     parent_inode.modified_time = time(NULL);
+
     if (inode_write(fs->disk, parent_inode_num, &parent_inode) != SUCCESS) {
         return ERROR_IO;
     }
 
-    // save
-    save_bitmaps(fs);
-    superblock_write(fs->disk, &fs->sb);
+    // free target directory inode and its blocks
+    uint32_t freed_blocks = 0;
+    if (inode_free(fs->disk, fs->inode_bitmap, fs->block_bitmap,
+                   target_inode_num, &freed_blocks) != SUCCESS) {
+        return ERROR_IO;
+    }
+
+    fs->sb.free_inodes++;
+    fs->sb.free_blocks += freed_blocks;
+
+    if (save_bitmaps(fs) != SUCCESS) {
+        return ERROR_IO;
+    }
+
+    if (superblock_write(fs->disk, &fs->sb) != SUCCESS) {
+        return ERROR_IO;
+    }
 
     return SUCCESS;
 }
@@ -1301,9 +1497,12 @@ int fs_link(filesystem_t* fs, const char* existing_path, const char* new_path) {
     struct dentry new_dentry;
     dentry_create(filename, existing_inode_num, INODE_TYPE_FILE, &new_dentry);
 
-    if (dentry_add(fs->disk, parent_inode_num, &new_dentry, fs->block_bitmap) != SUCCESS) {
+    uint32_t allocated_blocks = 0;
+
+    if (dentry_add(fs->disk, parent_inode_num, &new_dentry, fs->block_bitmap, &allocated_blocks) != SUCCESS) {
         return ERROR_IO;
     }
+    fs->sb.free_blocks -= allocated_blocks;
 
     // increment link count
     inode.links_count++;
@@ -1311,6 +1510,9 @@ int fs_link(filesystem_t* fs, const char* existing_path, const char* new_path) {
     inode_write(fs->disk, existing_inode_num, &inode);
 
     save_bitmaps(fs);
+    if (superblock_write(fs->disk, &fs->sb) != SUCCESS) {
+        return ERROR_IO;
+    }
 
     return SUCCESS;
 }

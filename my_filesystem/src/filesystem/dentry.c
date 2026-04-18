@@ -233,9 +233,13 @@ int dentry_find(disk_t disk, uint32_t dir_inode_num,
 
 int dentry_add(disk_t disk, uint32_t dir_inode_num, 
                const struct dentry* new_dentry,
-               struct bitmap* block_bitmap) {
+               struct bitmap* block_bitmap,
+               uint32_t* out_blocks_allocated) {
     if (!disk || !new_dentry || !block_bitmap) 
         return ERROR_INVALID;
+
+    if (out_blocks_allocated)
+        *out_blocks_allocated = 0;
     
     if (!dentry_is_valid(new_dentry)) 
         return ERROR_INVALID;
@@ -266,6 +270,9 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
             // mark block as used
             if (bitmap_set(block_bitmap, new_block) != SUCCESS)
                 return ERROR_GENERIC;
+
+            if (out_blocks_allocated)
+                (*out_blocks_allocated)++;
             
             // update directory inode
             dir_inode.direct[i] = new_block;
@@ -276,6 +283,8 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
             if (inode_write(disk, dir_inode_num, &dir_inode) != SUCCESS) {
                 // rollback: free the block
                 bitmap_clear(block_bitmap, new_block);
+                if (out_blocks_allocated)
+                    (*out_blocks_allocated)--;
                 return ERROR_IO;
             }
             
@@ -293,6 +302,8 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
                 dir_inode.blocks_used--;
                 inode_write(disk, dir_inode_num, &dir_inode);
                 bitmap_clear(block_bitmap, new_block);
+                if (out_blocks_allocated)
+                    (*out_blocks_allocated)--;
                 return ERROR_IO;
             }
             
@@ -328,20 +339,34 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
         if (indirect_block < 0)
             return ERROR_NO_SPACE;
         
-        bitmap_set(block_bitmap, indirect_block);
+        if (bitmap_set(block_bitmap, indirect_block) != SUCCESS)
+            return ERROR_GENERIC;
+        
+        if (out_blocks_allocated)
+            (*out_blocks_allocated)++;
         
         dir_inode.indirect = indirect_block;
         dir_inode.blocks_used++;
         
         if (inode_write(disk, dir_inode_num, &dir_inode) != SUCCESS) {
             bitmap_clear(block_bitmap, indirect_block);
+            if (out_blocks_allocated)
+                (*out_blocks_allocated)--;
             return ERROR_IO;
         }
         
         // initialize indirect block (all zeros = no data blocks allocated)
         char indirect_buffer[BLOCK_SIZE];
         memset(indirect_buffer, 0, BLOCK_SIZE);
-        disk_write_block(disk, indirect_block, indirect_buffer);
+        if (disk_write_block(disk, indirect_block, indirect_buffer) != DISK_SUCCESS) {
+            dir_inode.indirect = 0;
+            dir_inode.blocks_used--;
+            inode_write(disk, dir_inode_num, &dir_inode);
+            bitmap_clear(block_bitmap, indirect_block);
+            if (out_blocks_allocated)
+                (*out_blocks_allocated)--;
+            return ERROR_IO;
+        }
     }
     
     // read indirect block
@@ -360,19 +385,33 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
             if (new_block < 0)
                 return ERROR_NO_SPACE;
             
-            bitmap_set(block_bitmap, new_block);
+            if (bitmap_set(block_bitmap, new_block) != SUCCESS)
+                return ERROR_GENERIC;
+            
+            if (out_blocks_allocated)
+                (*out_blocks_allocated)++;
             
             // update indirect block
             block_ptrs[i] = new_block;
             if (disk_write_block(disk, dir_inode.indirect, indirect_buffer) != DISK_SUCCESS) {
                 bitmap_clear(block_bitmap, new_block);
+                if (out_blocks_allocated)
+                    (*out_blocks_allocated)--;
                 return ERROR_IO;
             }
             
             // update inode
             dir_inode.blocks_used++;
             dir_inode.modified_time = time(NULL);
-            inode_write(disk, dir_inode_num, &dir_inode);
+            if (inode_write(disk, dir_inode_num, &dir_inode) != SUCCESS) {
+                // rollback
+                block_ptrs[i] = 0;
+                disk_write_block(disk, dir_inode.indirect, indirect_buffer);
+                bitmap_clear(block_bitmap, new_block);
+                if (out_blocks_allocated)
+                    (*out_blocks_allocated)--;
+                return ERROR_IO;
+            }
             
             // initialize new data block and add dentry
             char buffer[BLOCK_SIZE];
@@ -385,6 +424,8 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
                 block_ptrs[i] = 0;
                 disk_write_block(disk, dir_inode.indirect, indirect_buffer);
                 bitmap_clear(block_bitmap, new_block);
+                if (out_blocks_allocated)
+                    (*out_blocks_allocated)--;
                 return ERROR_IO;
             }
             

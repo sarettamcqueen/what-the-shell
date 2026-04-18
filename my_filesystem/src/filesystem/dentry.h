@@ -28,7 +28,8 @@ int dentry_find(disk_t disk, uint32_t dir_inode_num,
 // adds a new dentry to a directory
 int dentry_add(disk_t disk, uint32_t dir_inode_num, 
                const struct dentry* new_dentry,
-               struct bitmap* block_bitmap);
+               struct bitmap* block_bitmap,
+               uint32_t* out_blocks_allocated);
 
 // removes a dentry from a directory by marking it as free
 int dentry_remove(disk_t disk, uint32_t dir_inode_num, const char* name);
