@@ -869,6 +869,7 @@ cleanup:
     }
 
     fs->is_mounted = false;
+    disk_detach(fs->disk); // detach before freeing fs
     free(fs);
 
     if (status == SUCCESS) {
@@ -1495,7 +1496,7 @@ int fs_link(filesystem_t* fs, const char* existing_path, const char* new_path) {
 
     // create new dentry pointing to same inode
     struct dentry new_dentry;
-    dentry_create(filename, existing_inode_num, INODE_TYPE_FILE, &new_dentry);
+    dentry_create(filename, existing_inode_num, inode.type, &new_dentry);
 
     uint32_t allocated_blocks = 0;
 
@@ -1507,7 +1508,12 @@ int fs_link(filesystem_t* fs, const char* existing_path, const char* new_path) {
     // increment link count
     inode.links_count++;
     inode.modified_time = time(NULL);
-    inode_write(fs->disk, existing_inode_num, &inode);
+    if (inode_write(fs->disk, existing_inode_num, &inode) != SUCCESS) {
+        // rollback the dentry
+        dentry_remove(fs->disk, parent_inode_num, filename);
+        fs->sb.free_blocks += allocated_blocks;
+        return ERROR_IO;
+    }
 
     save_bitmaps(fs);
     if (superblock_write(fs->disk, &fs->sb) != SUCCESS) {
