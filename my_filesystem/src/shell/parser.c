@@ -1,6 +1,7 @@
 #include "parser.h"
 #include <string.h>
 #include <ctype.h>
+#include <stdbool.h>
 
 /*
  * Removes trailing newline
@@ -22,42 +23,61 @@ int parse_line(char* line, char** argv, int max_tokens) {
     int argc = 0;
     char* p = line;
 
-    // skip initial blanks
-    while (*p && isspace((unsigned char)*p))
+    while (*p && isspace((unsigned char)*p)) {
         p++;
+    }
 
-    while (*p && argc < max_tokens) {
-        // handle quoted token
+    while (*p) {
+        if (argc >= max_tokens - 1) {
+            return -1;
+        }
+
         if (*p == '"') {
-            p++; // skip "
-            argv[argc++] = p;
+            bool closed = false;
+            p++;  // skip opening quote
 
-            // find matching "
-            while (*p && *p != '"')
-                p++;
+            char* token_start = p;
+            char* out = p;
 
-            if (*p == '"') {
-                *p = '\0'; // terminate token
-                p++;
+            while (*p) {
+                if (*p == '\\' && (p[1] == '"' || p[1] == '\\')) {
+                    *out++ = p[1];
+                    p += 2;
+                } else if (*p == '"') {
+                    p++;
+                    closed = true;
+                    break;
+                } else {
+                    *out++ = *p++;
+                }
             }
 
-        } else {
-            // unquoted token
-            argv[argc++] = p;
+            if (!closed) {
+                return -1;
+            }
 
-            while (*p && !isspace((unsigned char)*p))
+            *out = '\0';
+            argv[argc++] = token_start;
+        } else {
+            char* token_start = p;
+
+            while (*p && !isspace((unsigned char)*p)) {
                 p++;
+            }
 
             if (*p) {
                 *p = '\0';
                 p++;
             }
+
+            argv[argc++] = token_start;
         }
 
-        // skip until next non-space or end
-        while (*p && isspace((unsigned char)*p))
+        while (*p && isspace((unsigned char)*p)) {
             p++;
+        }
     }
 
+    argv[argc] = NULL;
     return argc;
 }
