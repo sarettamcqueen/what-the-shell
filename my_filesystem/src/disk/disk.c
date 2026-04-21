@@ -53,6 +53,7 @@ int disk_attach(const char* filename, size_t size, bool create_new, disk_t* disk
     d->fd = open(filename, flags, mode);
     if (d->fd == -1) {
         perror("disk_attach: open");
+        free(d);
         return DISK_ERROR_IO;
     }
 
@@ -62,6 +63,7 @@ int disk_attach(const char* filename, size_t size, bool create_new, disk_t* disk
             perror("disk_attach: ftruncate");
             close(d->fd);
             d->fd = -1;
+            free(d);
             return DISK_ERROR_IO;
         }
         d->size = size;
@@ -72,6 +74,7 @@ int disk_attach(const char* filename, size_t size, bool create_new, disk_t* disk
             perror("disk_attach: fstat");
             close(d->fd);
             d->fd = -1;
+            free(d);
             return DISK_ERROR_IO;
         }
         d->size = st.st_size;
@@ -84,6 +87,7 @@ int disk_attach(const char* filename, size_t size, bool create_new, disk_t* disk
         perror("disk_attach: mmap");
         close(d->fd);
         d->fd = -1;
+        free(d);
         return DISK_ERROR_IO;
     }
 
@@ -127,8 +131,7 @@ int disk_detach(disk_t disk) {
     disk->fd = -1;
     disk->block_size = BLOCK_SIZE;
 
-     free(disk);   /* this was missing */
-
+    free(disk);
     return DISK_SUCCESS;
 }
 
