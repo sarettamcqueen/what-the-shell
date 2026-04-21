@@ -327,7 +327,7 @@ int cmd_ln(filesystem_t* fs, int argc, char** argv) {
 
     int ret = fs_link(fs, argv[1], argv[2]);
     if (ret != SUCCESS)
-        printf("ln: cannot link %s -> %s: \n", argv[1], argv[2]);
+        printf("ln: cannot link %s -> %s: %s\n", argv[1], argv[2], fs_error_to_string(ret));
     return 0;
 }
 
@@ -346,7 +346,7 @@ int cmd_stat(filesystem_t* fs, int argc, char** argv) {
         print_fs_error("stat", ret, argv[1]);
         return 0;
     }
-
+    
     // build absolute path for pretty display
     char abs_path[MAX_PATH];
 
@@ -360,7 +360,7 @@ int cmd_stat(filesystem_t* fs, int argc, char** argv) {
         fs_inode_to_path(fs, fs->current_dir_inode, cwd, sizeof(cwd));
 
         if (strcmp(cwd, "/") == 0) {
-            /* Special case: root */
+            // special case: root
             snprintf(abs_path, sizeof(abs_path), "/%s", argv[1]);
         } else {
             snprintf(abs_path, sizeof(abs_path), "%s/%s", cwd, argv[1]);
@@ -368,7 +368,12 @@ int cmd_stat(filesystem_t* fs, int argc, char** argv) {
     }
 
     // clean up duplicate slashes if any
-    path_normalize(abs_path);
+    char* normalized = path_normalize(abs_path);
+    if (normalized) {
+        strncpy(abs_path, normalized, sizeof(abs_path) - 1);
+        abs_path[sizeof(abs_path) - 1] = '\0';
+        free(normalized);
+    }
 
     // print inode info
     printf("\n=== STAT ===\n");
