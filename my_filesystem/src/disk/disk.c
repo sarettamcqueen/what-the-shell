@@ -127,6 +127,8 @@ int disk_detach(disk_t disk) {
     disk->fd = -1;
     disk->block_size = BLOCK_SIZE;
 
+     free(disk);   /* this was missing */
+
     return DISK_SUCCESS;
 }
 
