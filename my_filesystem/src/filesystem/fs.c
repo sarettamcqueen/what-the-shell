@@ -105,145 +105,14 @@ static int read_inode_data(filesystem_t* fs, const struct inode* inode,
  * Writes data to an inode's data blocks.
  * Allocates new blocks as needed.
  */
-
-/*
- static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inode_num,
+static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inode_num,
                             uint32_t offset, const void* buffer, size_t size, size_t* bytes_written) {
     if (!fs || !inode || !buffer || !bytes_written) {
         return ERROR_INVALID;
     }
 
-    uint32_t start_block_idx = offset / BLOCK_SIZE;
-    uint32_t start_offset = offset % BLOCK_SIZE;
-    uint32_t remaining = size;
-    const uint8_t* buf_ptr = (const uint8_t*)buffer;
-
-    char block_buffer[BLOCK_SIZE];
-    bool inode_modified = false;
-
-    while (remaining > 0) {
-        uint32_t block_num = 0;
-        uint32_t* block_num_ptr = NULL;
-        bool needs_indirect_write = false;
-        char indirect_buffer[BLOCK_SIZE];
-
-        // determine which block to write
-        if (start_block_idx < 12) {
-            // direct block
-            block_num = inode->direct[start_block_idx];
-            block_num_ptr = &inode->direct[start_block_idx];
-        } else {
-            // indirect block
-            uint32_t indirect_idx = start_block_idx - 12;
-            
-            if (indirect_idx >= BLOCK_SIZE / sizeof(uint32_t)) {
-                return ERROR_NO_SPACE;
-            }
-
-            if (inode->indirect == 0) {
-                // allocate indirect block
-                int new_block = bitmap_find_first_free(fs->block_bitmap);
-                if (new_block < 0) {
-                    return ERROR_NO_SPACE;
-                }
-                bitmap_set(fs->block_bitmap, new_block);
-                inode->indirect = new_block;
-                inode->blocks_used++;
-                inode_modified = true;
-
-                // initialize indirect block with zeros
-                memset(indirect_buffer, 0, BLOCK_SIZE);
-                if (disk_write_block(fs->disk, new_block, indirect_buffer) != DISK_SUCCESS) {
-                    bitmap_clear(fs->block_bitmap, new_block);
-                    return ERROR_IO;
-                }
-            }
-
-            // read indirect block
-            if (disk_read_block(fs->disk, inode->indirect, indirect_buffer) != DISK_SUCCESS) {
-                return ERROR_IO;
-            }
-
-            uint32_t* block_ptrs = (uint32_t*)indirect_buffer;
-            block_num = block_ptrs[indirect_idx];
-            block_num_ptr = &block_ptrs[indirect_idx];
-            needs_indirect_write = true;
-        }
-
-        // allocate block if needed
-        if (block_num == 0) {
-            int new_block = bitmap_find_first_free(fs->block_bitmap);
-            if (new_block < 0) {
-                return ERROR_NO_SPACE;
-            }
-            bitmap_set(fs->block_bitmap, new_block);
-            block_num = new_block;
-            *block_num_ptr = new_block;
-            inode->blocks_used++;
-            inode_modified = true;
-
-            // Initialize with zeros
-            memset(block_buffer, 0, BLOCK_SIZE);
-
-            if (needs_indirect_write) {
-                if (disk_write_block(fs->disk, inode->indirect, indirect_buffer) != DISK_SUCCESS) {
-                    bitmap_clear(fs->block_bitmap, new_block);
-                    return ERROR_IO;
-                }
-            }
-        } else {
-            // read existing block if partial write
-            if (start_offset != 0 || remaining < BLOCK_SIZE) {
-                if (disk_read_block(fs->disk, block_num, block_buffer) != DISK_SUCCESS) {
-                    return ERROR_IO;
-                }
-            }
-        }
-
-        // write data to block buffer
-        uint32_t chunk = (remaining < BLOCK_SIZE - start_offset) ? remaining : (BLOCK_SIZE - start_offset);
-        memcpy(block_buffer + start_offset, buf_ptr, chunk);
-
-        // write block to disk
-        if (disk_write_block(fs->disk, block_num, block_buffer) != DISK_SUCCESS) {
-            return ERROR_IO;
-        }
-
-        buf_ptr += chunk;
-        remaining -= chunk;
-        start_block_idx++;
-        start_offset = 0;
-    }
-
-    // update inode size if needed
-    uint32_t end_pos = offset + size;
-    if (end_pos > inode->size) {
-        inode->size = end_pos;
-        inode_modified = true;
-    }
-
-    // update modification time
-    inode->modified_time = time(NULL);
-    inode_modified = true;
-
-    // write inode back to disk
-    if (inode_modified) {
-        if (inode_write(fs->disk, inode_num, inode) != SUCCESS) {
-            return ERROR_IO;
-        }
-    }
-
-    *bytes_written = size;
-    return SUCCESS;
-} */
-
-/**
- * Writes data to an inode's data blocks.
- * Allocates new blocks as needed.
- */
-static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inode_num,
-                            uint32_t offset, const void* buffer, size_t size, size_t* bytes_written) {
-    if (!fs || !inode || !buffer || !bytes_written) {
+    // guard against offset + size overflow
+    if (size > UINT32_MAX - offset) {
         return ERROR_INVALID;
     }
 
@@ -271,9 +140,9 @@ static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inod
 
         // determine which block to write
         if (start_block_idx < 12) {
-            // direct block
+            // direct block — do not take address of packed member
             block_num = inode->direct[start_block_idx];
-            block_num_ptr = &inode->direct[start_block_idx];
+            block_num_ptr = NULL;
         } else {
             // indirect block
             uint32_t indirect_idx = start_block_idx - 12;
@@ -283,7 +152,6 @@ static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inod
             }
 
             if (inode->indirect == 0) {
-                // allocate indirect block
                 int new_block = bitmap_find_first_free(fs->block_bitmap);
                 if (new_block < 0) {
                     return ERROR_NO_SPACE;
@@ -301,7 +169,6 @@ static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inod
                 allocated_indirect_block = true;
                 allocated_indirect_block_num = new_block;
 
-                // initialize indirect block with zeros
                 memset(indirect_buffer, 0, BLOCK_SIZE);
                 if (disk_write_block(fs->disk, new_block, indirect_buffer) != DISK_SUCCESS) {
                     bitmap_clear(fs->block_bitmap, new_block);
@@ -312,7 +179,6 @@ static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inod
                 }
             }
 
-            // read indirect block
             if (disk_read_block(fs->disk, inode->indirect, indirect_buffer) != DISK_SUCCESS) {
                 return ERROR_IO;
             }
@@ -327,7 +193,6 @@ static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inod
         if (block_num == 0) {
             int new_block = bitmap_find_first_free(fs->block_bitmap);
             if (new_block < 0) {
-                // rollback an indirect block allocated in this iteration, if any
                 if (allocated_indirect_block) {
                     bitmap_clear(fs->block_bitmap, allocated_indirect_block_num);
                     fs->sb.free_blocks++;
@@ -349,14 +214,18 @@ static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inod
 
             fs->sb.free_blocks--;
             block_num = new_block;
-            *block_num_ptr = new_block;
             inode->blocks_used++;
             inode_modified = true;
+
+            if (needs_indirect_write) {
+                *block_num_ptr = new_block;
+            } else {
+                inode->direct[start_block_idx] = new_block;
+            }
 
             allocated_data_block = true;
             allocated_data_block_num = new_block;
 
-            // Initialize with zeros
             memset(block_buffer, 0, BLOCK_SIZE);
 
             if (needs_indirect_write) {
@@ -377,7 +246,6 @@ static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inod
                 }
             }
         } else {
-            // read existing block if partial write
             if (start_offset != 0 || remaining < BLOCK_SIZE) {
                 if (disk_read_block(fs->disk, block_num, block_buffer) != DISK_SUCCESS) {
                     return ERROR_IO;
@@ -396,7 +264,13 @@ static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inod
             if (allocated_data_block) {
                 bitmap_clear(fs->block_bitmap, allocated_data_block_num);
                 fs->sb.free_blocks++;
-                *block_num_ptr = 0;
+                if (needs_indirect_write) {
+                    *block_num_ptr = 0;
+                    // sync indirect block back to disk after rollback
+                    disk_write_block(fs->disk, inode->indirect, indirect_buffer);
+                } else {
+                    inode->direct[start_block_idx] = 0;
+                }
                 inode->blocks_used--;
             }
 
@@ -424,15 +298,10 @@ static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inod
         inode_modified = true;
     }
 
-    // update modification time
+    // update modification time and write inode back to disk
     inode->modified_time = time(NULL);
-    inode_modified = true;
-
-    // write inode back to disk
-    if (inode_modified) {
-        if (inode_write(fs->disk, inode_num, inode) != SUCCESS) {
-            return ERROR_IO;
-        }
+    if (inode_write(fs->disk, inode_num, inode) != SUCCESS) {
+        return ERROR_IO;
     }
 
     return SUCCESS;
