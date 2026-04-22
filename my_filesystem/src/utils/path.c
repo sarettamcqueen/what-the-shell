@@ -6,16 +6,6 @@
 
 // === PRIVATE FUNCTIONS ===
 
-// helper: counts the number of path separators in a string
-static int count_separators(const char* path) {
-    int count = 0;
-    for (const char* p = path; *p; p++) {
-        if (*p == PATH_SEPARATOR)
-            count++;
-    }
-    return count;
-}
-
 // helper: removes trailing slashes from a path (except for root "/")
 static void remove_trailing_slashes(char* path) {
     if (!path || !path[0])
