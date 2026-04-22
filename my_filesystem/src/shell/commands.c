@@ -141,6 +141,7 @@ int cmd_unmount(filesystem_t** fs_p) {
 
 // pwd
 int cmd_pwd(filesystem_t* fs, int argc, char** argv) {
+    (void)argv;
     if (argc != 1) {
         printf("Usage: pwd\n");
         return ERROR_INVALID;
@@ -346,33 +347,15 @@ int cmd_stat(filesystem_t* fs, int argc, char** argv) {
         print_fs_error("stat", ret, argv[1]);
         return 0;
     }
-    
-    // build absolute path for pretty display
+    printf("[DEBUG cmd_stat] argv[1]='%s' inode_num=%u\n", argv[1], inode_num);
+
     char abs_path[MAX_PATH];
-
-    if (path_is_absolute(argv[1])) {
-        // just copy absolute path
-        strncpy(abs_path, argv[1], MAX_PATH);
-        abs_path[MAX_PATH - 1] = '\0';
-    } else {
-        // build absolute path from cwd + relative
-        char cwd[MAX_PATH];
-        fs_inode_to_path(fs, fs->current_dir_inode, cwd, sizeof(cwd));
-
-        if (strcmp(cwd, "/") == 0) {
-            // special case: root
-            snprintf(abs_path, sizeof(abs_path), "/%s", argv[1]);
-        } else {
-            snprintf(abs_path, sizeof(abs_path), "%s/%s", cwd, argv[1]);
+    if (fs_inode_to_path(fs, inode_num, abs_path, sizeof(abs_path)) != SUCCESS) {
+        int n = snprintf(abs_path, sizeof(abs_path), "%s", argv[1]);
+        if (n < 0 || (size_t)n >= sizeof(abs_path)) {
+            printf("stat: path too long.\n");
+            return 0;
         }
-    }
-
-    // clean up duplicate slashes if any
-    char* normalized = path_normalize(abs_path);
-    if (normalized) {
-        strncpy(abs_path, normalized, sizeof(abs_path) - 1);
-        abs_path[sizeof(abs_path) - 1] = '\0';
-        free(normalized);
     }
 
     // print inode info
