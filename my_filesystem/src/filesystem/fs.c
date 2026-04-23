@@ -298,10 +298,12 @@ static int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inod
         inode_modified = true;
     }
 
-    // update modification time and write inode back to disk
-    inode->modified_time = time(NULL);
-    if (inode_write(fs->disk, inode_num, inode) != SUCCESS) {
-        return ERROR_IO;
+    if(inode_modified) {
+        // update modification time and write inode back to disk
+        inode->modified_time = time(NULL);
+        if (inode_write(fs->disk, inode_num, inode) != SUCCESS) {
+            return ERROR_IO;
+        }
     }
 
     return SUCCESS;
@@ -1553,15 +1555,13 @@ int fs_inode_to_path(filesystem_t* fs, uint32_t inode_num, char* out_path, size_
     return SUCCESS;
 }
 
-int fs_stat(filesystem_t* fs, const char* path, struct inode* out_inode, uint32_t* out_inode_num) {
-    if (!fs || !path || !out_inode) {
+int fs_stat(filesystem_t* fs, const char* path, struct inode* out_inode,
+            uint32_t* out_inode_num, char* out_abs_path, size_t out_abs_path_size) {
+    if (!fs || !path || !out_inode)
         return ERROR_INVALID;
-    }
 
-    // validate path
-    if (!path_is_valid(path)) {
+    if (!path_is_valid(path))
         return ERROR_INVALID;
-    }
 
     uint32_t inode_num;
     int res = fs_path_to_inode(fs, path, &inode_num);
@@ -1570,7 +1570,36 @@ int fs_stat(filesystem_t* fs, const char* path, struct inode* out_inode, uint32_
     res = inode_read(fs->disk, inode_num, out_inode);
     if (res != SUCCESS) return res;
 
-    if (out_inode_num) *out_inode_num = inode_num;
+    if (out_inode_num)
+        *out_inode_num = inode_num;
+
+    if (out_abs_path && out_abs_path_size > 0) {
+        if (path_is_absolute(path)) {
+            char* normalized = path_normalize(path);
+            if (normalized) {
+                strncpy(out_abs_path, normalized, out_abs_path_size - 1);
+                out_abs_path[out_abs_path_size - 1] = '\0';
+                free(normalized);
+            }
+        } else {
+            char cwd[MAX_PATH];
+            fs_inode_to_path(fs, fs->current_dir_inode, cwd, sizeof(cwd));
+
+            char tmp[MAX_PATH];
+            int written = snprintf(tmp, sizeof(tmp), "%s/%s",
+                                   strcmp(cwd, "/") == 0 ? "" : cwd, path);
+            if (written < 0 || written >= (int)sizeof(tmp))
+                tmp[sizeof(tmp) - 1] = '\0';  // truncate
+
+            char* normalized = path_normalize(tmp);
+            if (normalized) {
+                strncpy(out_abs_path, normalized, out_abs_path_size - 1);
+                out_abs_path[out_abs_path_size - 1] = '\0';
+                free(normalized);
+            }
+        }
+    }
+
     return SUCCESS;
 }
 
