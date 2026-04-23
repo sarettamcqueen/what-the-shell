@@ -341,22 +341,14 @@ int cmd_stat(filesystem_t* fs, int argc, char** argv) {
 
     struct inode st;
     uint32_t inode_num;
+    char abs_path[MAX_PATH];
 
-    int ret = fs_stat(fs, argv[1], &st, &inode_num);
+    int ret = fs_stat(fs, argv[1], &st, &inode_num, abs_path, sizeof(abs_path));
     if (ret != SUCCESS) {
         print_fs_error("stat", ret, argv[1]);
         return 0;
     }
     printf("[DEBUG cmd_stat] argv[1]='%s' inode_num=%u\n", argv[1], inode_num);
-
-    char abs_path[MAX_PATH];
-    if (fs_inode_to_path(fs, inode_num, abs_path, sizeof(abs_path)) != SUCCESS) {
-        int n = snprintf(abs_path, sizeof(abs_path), "%s", argv[1]);
-        if (n < 0 || (size_t)n >= sizeof(abs_path)) {
-            printf("stat: path too long.\n");
-            return 0;
-        }
-    }
 
     // print inode info
     printf("\n=== STAT ===\n");

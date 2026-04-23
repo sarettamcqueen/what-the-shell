@@ -229,9 +229,11 @@ int fs_inode_to_path(filesystem_t* fs, uint32_t inode_num, char* out_path, size_
  * @param path Path to the file/directory
  * @param out_inode Pointer to receive inode data
  * @param out_inode_num Pointer to receive inode number
+ * @param out_abs_path Buffer to receive the resolved absolute path (may be NULL)
+ * @param out_abs_path_size Size of the out_abs_path buffer in bytes (0 if out_abs_path is NULL)
  * @return SUCCESS or error code
  */
-int fs_stat(filesystem_t* fs, const char* path, struct inode* out_inode, uint32_t* out_inode_num);
+int fs_stat(filesystem_t* fs, const char* path, struct inode* out_inode, uint32_t* out_inode_num, char* out_abs_path, size_t out_abs_path_size);
 
 // === UTILITIES ===
 
