@@ -40,9 +40,20 @@ INODE_OBJ = $(BUILDDIR)/inode.o
 DENTRY_SRC = $(SRCDIR)/filesystem/dentry.c
 DENTRY_OBJ = $(BUILDDIR)/dentry.o
 
-# fs module
-FS_SRC = $(SRCDIR)/filesystem/fs.c
-FS_OBJ = $(BUILDDIR)/fs.o
+# fs module (split into submodules)
+FS_SRCS = $(SRCDIR)/filesystem/fs_mount.c \
+          $(SRCDIR)/filesystem/fs_io.c \
+          $(SRCDIR)/filesystem/fs_dir.c \
+          $(SRCDIR)/filesystem/fs_file.c \
+          $(SRCDIR)/filesystem/fs_path.c \
+          $(SRCDIR)/filesystem/fs_stat.c
+
+FS_OBJS = $(BUILDDIR)/fs_mount.o \
+          $(BUILDDIR)/fs_io.o \
+          $(BUILDDIR)/fs_dir.o \
+          $(BUILDDIR)/fs_file.o \
+          $(BUILDDIR)/fs_path.o \
+          $(BUILDDIR)/fs_stat.o
 
 # shell module
 SHELL_SRC = $(SRCDIR)/shell/shell.c
@@ -187,9 +198,32 @@ $(DENTRY_OBJ): $(DENTRY_SRC) $(SRCDIR)/filesystem/dentry.h $(SRCDIR)/filesystem/
 	@echo "Compiling dentry module..."
 	@$(CC) $(CFLAGS) -I$(SRCDIR)/filesystem -I$(SRCDIR)/utils -I$(SRCDIR)/disk -c $< -o $@
 
-$(FS_OBJ): $(FS_SRC) $(SRCDIR)/filesystem/fs.h $(COMMON_HEADERS)
-	@echo "Compiling fs module..."
-	@$(CC) $(CFLAGS) -I$(SRCDIR)/filesystem -I$(SRCDIR)/utils -I$(SRCDIR)/disk -c $< -o $@
+FS_INCLUDES = -I$(SRCDIR)/filesystem -I$(SRCDIR)/utils -I$(SRCDIR)/disk
+FS_HEADERS = $(SRCDIR)/filesystem/fs.h $(SRCDIR)/filesystem/fs_internal.h $(COMMON_HEADERS)
+
+$(BUILDDIR)/fs_mount.o: $(SRCDIR)/filesystem/fs_mount.c $(FS_HEADERS)
+	@echo "Compiling fs_mount..."
+	@$(CC) $(CFLAGS) $(FS_INCLUDES) -c $< -o $@
+
+$(BUILDDIR)/fs_io.o: $(SRCDIR)/filesystem/fs_io.c $(FS_HEADERS)
+	@echo "Compiling fs_io..."
+	@$(CC) $(CFLAGS) $(FS_INCLUDES) -c $< -o $@
+
+$(BUILDDIR)/fs_dir.o: $(SRCDIR)/filesystem/fs_dir.c $(FS_HEADERS)
+	@echo "Compiling fs_dir..."
+	@$(CC) $(CFLAGS) $(FS_INCLUDES) -c $< -o $@
+
+$(BUILDDIR)/fs_file.o: $(SRCDIR)/filesystem/fs_file.c $(FS_HEADERS)
+	@echo "Compiling fs_file..."
+	@$(CC) $(CFLAGS) $(FS_INCLUDES) -c $< -o $@
+
+$(BUILDDIR)/fs_path.o: $(SRCDIR)/filesystem/fs_path.c $(FS_HEADERS)
+	@echo "Compiling fs_path..."
+	@$(CC) $(CFLAGS) $(FS_INCLUDES) -c $< -o $@
+
+$(BUILDDIR)/fs_stat.o: $(SRCDIR)/filesystem/fs_stat.c $(FS_HEADERS)
+	@echo "Compiling fs_stat..."
+	@$(CC) $(CFLAGS) $(FS_INCLUDES) -c $< -o $@
 
 $(SHELL_OBJ): $(SHELL_SRC) $(SRCDIR)/shell/shell.h
 	@echo "Compiling shell..."
@@ -236,21 +270,21 @@ $(TEST_PATH_BIN): $(PATH_OBJ) $(COMMON_OBJ) $(TEST_PATH_SRC)
 	@echo "Building test_path..."
 	@$(CC) $(CFLAGS) -I$(SRCDIR)/utils $(TEST_PATH_SRC) $(PATH_OBJ) $(COMMON_OBJ) -o $@
 
-$(TEST_FS_BIN): $(FS_OBJ) $(DISK_OBJ) $(COMMON_OBJ) $(BITMAP_OBJ) \
+$(TEST_FS_BIN): $(FS_OBJS) $(DISK_OBJ) $(COMMON_OBJ) $(BITMAP_OBJ) \
                 $(INODE_OBJ) $(DENTRY_OBJ) $(PATH_OBJ) $(SUPERBLOCK_OBJ) \
                 $(TEST_FS_SRC)
 	@echo "Building test_fs..."
 	@$(CC) $(CFLAGS) -I$(SRCDIR)/filesystem -I$(SRCDIR)/utils -I$(SRCDIR)/disk \
-		$(TEST_FS_SRC) $(FS_OBJ) $(DISK_OBJ) $(COMMON_OBJ) $(BITMAP_OBJ) \
+		$(TEST_FS_SRC) $(FS_OBJS) $(DISK_OBJ) $(COMMON_OBJ) $(BITMAP_OBJ) \
 		$(INODE_OBJ) $(DENTRY_OBJ) $(PATH_OBJ) $(SUPERBLOCK_OBJ) -o $@
 
 $(MAIN_BIN): $(MAIN_SRC) $(SHELL_OBJ) $(COMMANDS_OBJ) $(PARSER_OBJ) \
-             $(FS_OBJ) $(INODE_OBJ) $(DENTRY_OBJ) $(SUPERBLOCK_OBJ) \
+             $(FS_OBJS) $(INODE_OBJ) $(DENTRY_OBJ) $(SUPERBLOCK_OBJ) \
              $(PATH_OBJ) $(BITMAP_OBJ) $(DISK_OBJ) $(COMMON_OBJ)
 	@echo "Building shell..."
 	@$(CC) $(CFLAGS) -I$(SRCDIR)/shell -I$(SRCDIR)/filesystem -I$(SRCDIR)/utils -I$(SRCDIR)/disk \
 		$(MAIN_SRC) $(SHELL_OBJ) $(COMMANDS_OBJ) $(PARSER_OBJ) \
-		$(FS_OBJ) $(INODE_OBJ) $(DENTRY_OBJ) $(SUPERBLOCK_OBJ) \
+		$(FS_OBJS) $(INODE_OBJ) $(DENTRY_OBJ) $(SUPERBLOCK_OBJ) \
 		$(PATH_OBJ) $(BITMAP_OBJ) $(DISK_OBJ) $(COMMON_OBJ) -o $@
 
 # === CLEANUP ===

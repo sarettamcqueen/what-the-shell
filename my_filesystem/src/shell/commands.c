@@ -147,7 +147,7 @@ int cmd_pwd(filesystem_t* fs, int argc, char** argv) {
         return ERROR_INVALID;
     }
     char path[MAX_PATH];
-    int res = fs_inode_to_path(fs, fs->current_dir_inode, path, sizeof(path));
+    int res = fs_getcwd(fs, path, sizeof(path));
     if (res != SUCCESS) {
         printf("pwd: error resolving current directory\n");
         return res;
