@@ -16,7 +16,7 @@ static void shell_print_prompt(filesystem_t* fs) {
     }
 
     char path_buf[MAX_PATH];
-    if (fs_inode_to_path(fs, fs->current_dir_inode, path_buf, sizeof(path_buf)) != SUCCESS) {
+    if (fs_getcwd(fs, path_buf, sizeof(path_buf)) != SUCCESS) {
         strcpy(path_buf, "?");
     }
 
