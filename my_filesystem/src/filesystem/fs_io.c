@@ -437,7 +437,7 @@ int fs_write(open_file_t* file, const void* buffer, size_t size, size_t* bytes_w
         return res;
     }
 
-    //file->offset += *bytes_written;
+    file->offset += *bytes_written;
 
     // persist updated metadata
     if (save_bitmaps(file->fs) != SUCCESS) {

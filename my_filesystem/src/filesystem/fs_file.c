@@ -24,6 +24,7 @@ int fs_create(filesystem_t* fs, const char* path, uint16_t permissions) {
                     &new_inode, &new_inode_num) != SUCCESS) {
         return ERROR_NO_SPACE;
     }
+    fs->sb.free_inodes--;
 
     // create dentry
     struct dentry new_dentry;
@@ -50,7 +51,6 @@ int fs_create(filesystem_t* fs, const char* path, uint16_t permissions) {
 
     // update superblock and save
     save_bitmaps(fs);
-    fs->sb.free_inodes--;
     superblock_write(fs->disk, &fs->sb);
 
     return SUCCESS;
@@ -60,7 +60,12 @@ int fs_create(filesystem_t* fs, const char* path, uint16_t permissions) {
         fs->sb.free_blocks += allocated_blocks;
 
     cleanup_inode:
-        inode_free(fs->disk, fs->inode_bitmap, fs->block_bitmap, new_inode_num, NULL);
+        uint32_t freed_blocks = 0;
+        inode_free(fs->disk, fs->inode_bitmap, fs->block_bitmap, new_inode_num, &freed_blocks);
+        fs->sb.free_inodes++;
+        fs->sb.free_blocks += freed_blocks;
+        save_bitmaps(fs);
+        superblock_write(fs->disk, &fs->sb);
 
     return status;
 }

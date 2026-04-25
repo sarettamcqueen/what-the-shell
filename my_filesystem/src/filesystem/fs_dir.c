@@ -69,10 +69,6 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
     char dirname[MAX_FILENAME];
     uint32_t parent_inode_num;
 
-    uint32_t parent_dentry_blocks = 0;
-    uint32_t dot_blocks = 0;
-    uint32_t dotdot_blocks = 0;
-
     int res = fs_prepare_create(fs, path, parent_path, dirname, &parent_inode_num);
     if (res != SUCCESS) return res;
 
@@ -83,6 +79,7 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
                    &new_dir_inode, &new_dir_inode_num) != SUCCESS) {
         return ERROR_NO_SPACE;
     }
+    fs->sb.free_inodes--;
 
     // create dentry in parent directory
     struct dentry new_dentry;
@@ -91,6 +88,7 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
         goto cleanup_inode;
     }
 
+    uint32_t parent_dentry_blocks = 0;
     if (dentry_add(fs->disk, parent_inode_num, &new_dentry, fs->block_bitmap, &parent_dentry_blocks) != SUCCESS) {
         status = ERROR_IO;
         goto cleanup_inode;
@@ -105,6 +103,7 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
         goto cleanup_remove_parent_dentry;
     }
 
+    uint32_t dot_blocks = 0;
     if (dentry_add(fs->disk, new_dir_inode_num, &dot, fs->block_bitmap, &dot_blocks) != SUCCESS) {
         status = ERROR_IO;
         goto cleanup_remove_parent_dentry;
@@ -116,6 +115,7 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
         goto cleanup_remove_parent_dentry;
     }
 
+    uint32_t dotdot_blocks = 0;
     if (dentry_add(fs->disk, new_dir_inode_num, &dotdot, fs->block_bitmap, &dotdot_blocks) != SUCCESS) {
         status = ERROR_IO;
         goto cleanup_remove_parent_dentry;
@@ -148,7 +148,6 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
     }
 
     // update superblock
-    fs->sb.free_inodes--;
     if (superblock_write(fs->disk, &fs->sb) != SUCCESS) {
         status = ERROR_IO;
         goto cleanup_revert_parent_link;
@@ -177,8 +176,8 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
         inode_free(fs->disk, fs->inode_bitmap, fs->block_bitmap, new_dir_inode_num, &freed_blocks);
         fs->sb.free_inodes++;
         fs->sb.free_blocks += freed_blocks;
-        superblock_write(fs->disk, &fs->sb);
         save_bitmaps(fs);
+        superblock_write(fs->disk, &fs->sb);
     }
 
     return status;
