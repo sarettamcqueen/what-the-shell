@@ -165,7 +165,7 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
 
     cleanup_remove_parent_dentry:
         // remove dentry from parent directory (rollback)
-        dentry_remove(fs->disk, parent_inode_num, dirname);
+        dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, parent_inode_num, dirname);
 
         // restore only blocks allocated in the parent directory
         fs->sb.free_blocks += parent_dentry_blocks;
@@ -246,7 +246,7 @@ int fs_rmdir(filesystem_t* fs, const char* path) {
     if (res != SUCCESS) return res;
 
     // remove from parent directory
-    res = dentry_remove(fs->disk, parent_inode_num, dirname);
+    res = dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, parent_inode_num, dirname);
     if (res != SUCCESS) return res;
 
     // decrement parent link count

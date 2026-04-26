@@ -370,7 +370,7 @@ int cmd_stat(filesystem_t* fs, int argc, char** argv) {
 
     printf("\nDirect blocks : ");
     for (int i = 0; i < 12; i++) {
-        if (st.direct[i] == 0) break;
+        if (st.direct[i] == 0) continue;
         printf("%u ", st.direct[i]);
     }
     printf("\n");

@@ -332,7 +332,8 @@ int fs_open(filesystem_t* fs, const char* path, uint32_t flags, open_file_t** ou
     // truncate if requested
     if (flags & FS_O_TRUNC) {
         // free all data blocks
-        for (int i = 0; i < 12 && inode.direct[i] != 0; i++) {
+        for (int i = 0; i < 12; i++) {
+            if (inode.direct[i] == 0) continue;
             bitmap_clear(fs->block_bitmap, inode.direct[i]);
             fs->sb.free_blocks++;
             inode.direct[i] = 0;
@@ -345,7 +346,8 @@ int fs_open(filesystem_t* fs, const char* path, uint32_t flags, open_file_t** ou
             }
             uint32_t* block_ptrs = (uint32_t*)indirect_buffer;
 
-            for (uint32_t i = 0; i < BLOCK_SIZE / sizeof(uint32_t) && block_ptrs[i] != 0; i++) {
+            for (uint32_t i = 0; i < BLOCK_SIZE / sizeof(uint32_t); i++) {
+                if (block_ptrs[i] == 0) continue;
                 bitmap_clear(fs->block_bitmap, block_ptrs[i]);
                 fs->sb.free_blocks++;
             }

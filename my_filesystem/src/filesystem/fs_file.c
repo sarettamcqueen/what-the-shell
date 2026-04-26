@@ -56,7 +56,7 @@ int fs_create(filesystem_t* fs, const char* path, uint16_t permissions) {
     return SUCCESS;
 
     cleanup_remove_parent_dentry:
-        dentry_remove(fs->disk, parent_inode_num, filename);
+        dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, parent_inode_num, filename);
         fs->sb.free_blocks += allocated_blocks;
 
     cleanup_inode:
@@ -146,7 +146,7 @@ int fs_link(filesystem_t* fs, const char* existing_path, const char* new_path) {
     inode.modified_time = time(NULL);
     if (inode_write(fs->disk, existing_inode_num, &inode) != SUCCESS) {
         // rollback the dentry
-        dentry_remove(fs->disk, parent_inode_num, filename);
+        dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, parent_inode_num, filename);
         fs->sb.free_blocks += allocated_blocks;
         return ERROR_IO;
     }
@@ -203,7 +203,7 @@ int fs_unlink(filesystem_t* fs, const char* path) {
     res = fs_path_to_inode(fs, parent_path, &parent_inode_num);
     if (res != SUCCESS) return res;
 
-    res = dentry_remove(fs->disk, parent_inode_num, filename);
+    res = dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, parent_inode_num, filename);
     if (res != SUCCESS) return res;
 
     // decrement link count

@@ -193,6 +193,9 @@ int fs_format(disk_t disk, size_t total_blocks, size_t total_inodes) {
     if (res != SUCCESS) { status = res; goto cleanup_inode; }
     sb.free_blocks -= allocated_blocks;
 
+    // read root inode from disk since it's been modified by previous dentry_add
+    res = inode_read(disk, root_inode_num, &root_inode);
+    if (res != SUCCESS) { status = res; goto cleanup_inode; }
     // set links_count for root and write inode back
     root_inode.links_count = 2;
     res = inode_write(disk, root_inode_num, &root_inode);

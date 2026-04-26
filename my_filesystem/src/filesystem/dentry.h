@@ -32,7 +32,8 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
                uint32_t* out_blocks_allocated);
 
 // removes a dentry from a directory by marking it as free
-int dentry_remove(disk_t disk, uint32_t dir_inode_num, const char* name);
+int dentry_remove(disk_t disk, struct bitmap* block_bitmap, struct superblock* sb, 
+                  uint32_t dir_inode_num, const char* name);
 
 // lists all valid dentries in a directory
 int dentry_list(disk_t disk, uint32_t dir_inode_num, 
