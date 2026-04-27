@@ -162,6 +162,22 @@ int fs_create(filesystem_t* fs, const char* path, uint16_t permissions);
 int fs_unlink(filesystem_t* fs, const char* path);
 
 /**
+ * @brief Renames or moves a file or directory within the filesystem.
+ *
+ * This function safely moves a file or directory from 'old_path' to 'new_path'
+ * by manipulating the directory entries without altering the actual
+ * inode data blocks. It intrinsically prevents the renaming of special system 
+ * links ("." and "..") and automatically updates the ".." reference when 
+ * a directory is moved to a different parent.
+ *
+ * @param fs The sileystem
+ * @param old_path Current path of the file or directory
+ * @param new_path Target path for the rename/move operation
+ * @return SUCCESS or error code
+ */
+int fs_rename(filesystem_t* fs, const char* old_path, const char* new_path);
+
+/**
  * Creates a new directory.
  * 
  * @param fs The filesystem
@@ -214,7 +230,7 @@ int fs_list(filesystem_t* fs, const char* path, struct dentry** out_entries, uin
  * @param fs The filesystem
  * @param buffer Output buffer that receives the path string
  * @param size Size of the output buffer, in bytes
- * @return SUCCESS on success, otherwise an error code
+ * @return SUCCESS or error code
  */
 int fs_getcwd(filesystem_t* fs, char* buffer, size_t size);
 
@@ -222,9 +238,9 @@ int fs_getcwd(filesystem_t* fs, char* buffer, size_t size);
  * Retrieves information about a file or directory.
  * 
  * @param fs The filesystem
- * @param path Path to the file/directory
- * @param out_inode Pointer to receive inode data
- * @param out_inode_num Pointer to receive inode number
+ * @param path Path to the file/directory (absolute or relative)
+ * @param out_inode Output inode structure
+ * @param out_inode_num Optional output for inode number
  * @param out_abs_path Buffer to receive the resolved absolute path (may be NULL)
  * @param out_abs_path_size Size of the out_abs_path buffer in bytes (0 if out_abs_path is NULL)
  * @return SUCCESS or error code

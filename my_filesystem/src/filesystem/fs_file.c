@@ -232,3 +232,93 @@ int fs_unlink(filesystem_t* fs, const char* path) {
 
     return SUCCESS;
 }
+
+int fs_rename(filesystem_t* fs, const char* old_path, const char* new_path) {
+    if (!fs || !old_path || !new_path)
+        return ERROR_INVALID;
+
+    // resolve old path
+    char old_parent[MAX_PATH], old_name[MAX_FILENAME];
+    char* normalized_old = path_normalize(old_path);
+    if (!normalized_old) return ERROR_INVALID;
+    
+    int res = path_split(normalized_old, old_parent, old_name);
+    free(normalized_old);
+    if (res != SUCCESS) return res;
+
+    // can't rename or move "." and ".."
+    if (strcmp(old_name, ".") == 0 || strcmp(old_name, "..") == 0) {
+        return ERROR_INVALID;
+    }
+
+    uint32_t old_parent_inode;
+    res = fs_path_to_inode(fs, old_parent, &old_parent_inode);
+    if (res != SUCCESS) return res;
+
+    struct dentry old_entry;
+    res = dentry_find(fs->disk, old_parent_inode, old_name, &old_entry, NULL);
+    if (res != SUCCESS) return res;
+
+    // resolve new path
+    char new_parent[MAX_PATH], new_name[MAX_FILENAME];
+    char* normalized_new = path_normalize(new_path);
+    if (!normalized_new) return ERROR_INVALID;
+    
+    res = path_split(normalized_new, new_parent, new_name);
+    free(normalized_new);
+    if (res != SUCCESS) return res;
+
+    uint32_t new_parent_inode;
+    res = fs_path_to_inode(fs, new_parent, &new_parent_inode);
+    if (res != SUCCESS) return res;
+
+    // check destination doesn't exist
+    if (dentry_find(fs->disk, new_parent_inode, new_name, NULL, NULL) == SUCCESS)
+        return ERROR_EXISTS;
+
+    // create new dentry with same inode
+    struct dentry new_entry;
+    res = dentry_create(new_name, old_entry.inode_num, old_entry.file_type, &new_entry);
+    if (res != SUCCESS) return res;
+
+    uint32_t allocated_blocks = 0;
+    res = dentry_add(fs->disk, new_parent_inode, &new_entry, fs->block_bitmap, &allocated_blocks);
+    if (res != SUCCESS) return res;
+
+    fs->sb.free_blocks -= allocated_blocks;
+
+    // remove old dentry
+    res = dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, old_parent_inode, old_name);
+    if (res != SUCCESS) {
+        // rollback: remove new dentry
+        dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, new_parent_inode, new_name);
+        fs->sb.free_blocks += allocated_blocks;
+        return res;
+    }
+
+    // update ".." if we're changing directory parent
+    if (old_entry.file_type == INODE_TYPE_DIRECTORY && old_parent_inode != new_parent_inode) {
+        
+        // remove old ".." link from the old directory inode
+        res = dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, old_entry.inode_num, "..");
+        if (res != SUCCESS) return res;
+        
+        // create new dentry pointing to new parent
+        struct dentry dotdot_entry;
+        dentry_create("..", new_parent_inode, INODE_TYPE_DIRECTORY, &dotdot_entry);
+        
+        // add new ".."
+        uint32_t dotdot_alloc = 0;
+        res = dentry_add(fs->disk, old_entry.inode_num, &dotdot_entry, fs->block_bitmap, &dotdot_alloc);
+        if (res != SUCCESS) return res;
+        
+        // update free blocks
+        fs->sb.free_blocks -= dotdot_alloc;
+    }
+
+    save_bitmaps(fs);
+    res = superblock_write(fs->disk, &fs->sb);
+    if (res != SUCCESS) return res;
+
+    return SUCCESS;
+}
