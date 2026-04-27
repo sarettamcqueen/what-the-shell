@@ -4,20 +4,6 @@
 #include <stdio.h>
 #include <ctype.h>
 
-// === PRIVATE FUNCTIONS ===
-
-// helper: removes trailing slashes from a path (except for root "/")
-static void remove_trailing_slashes(char* path) {
-    if (!path || !path[0])
-        return;
-    
-    size_t len = strlen(path);
-    while (len > 1 && path[len - 1] == PATH_SEPARATOR) {
-        path[len - 1] = '\0';
-        len--;
-    }
-}
-
 // === PATH PARSING ===
 
 struct path_components* path_parse(const char* path) {
@@ -384,6 +370,17 @@ char* path_normalize(const char* path) {
 }
 
 // === UTILITY FUNCTIONS ===
+
+void remove_trailing_slashes(char* path) {
+    if (!path || !path[0])
+        return;
+    
+    size_t len = strlen(path);
+    while (len > 1 && path[len - 1] == PATH_SEPARATOR) {
+        path[len - 1] = '\0';
+        len--;
+    }
+}
 
 void path_print_components(const struct path_components* pc) {
     if (!pc) {

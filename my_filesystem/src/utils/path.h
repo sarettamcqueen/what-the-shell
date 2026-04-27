@@ -36,6 +36,7 @@ char* path_get_dirname(const char* path);
 char* path_normalize(const char* path);
 
 // utility functions
+void remove_trailing_slashes(char* path);
 void path_print_components(const struct path_components* pc);
 int path_depth(const char* path);
 bool path_starts_with(const char* path, const char* prefix);
