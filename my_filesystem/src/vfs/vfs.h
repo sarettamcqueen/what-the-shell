@@ -27,7 +27,7 @@
 #include <stddef.h>
 
 // === VFS CONSTANTS ===
-#define MAX_MOUNTS 8  // Maximum number of filesystems that can be mounted simultaneously
+#define MAX_MOUNTS 8  // max number of filesystems that can be mounted simultaneously
 
 // === VFS STRUCTURES ===
 
@@ -46,7 +46,7 @@ typedef struct vfs_mount {
  * Manages the mount table and the unified current working directory.
  */
 typedef struct vfs {
-    int count;                        // Number of currently active mounts
+    uint32_t count;                   // Number of currently active mounts
     vfs_mount_t mounts[MAX_MOUNTS];   // Table of all mounted filesystems
     char cwd[MAX_PATH];               // Global unified Current Working Directory
 } vfs_t;
@@ -58,6 +58,17 @@ typedef struct vfs {
  * Initializes the VFS structure, clearing the mount table and setting CWD to "/".
  */
 void vfs_init(vfs_t* vfs);
+
+/**
+ * Checks whether the specified disk image can be safely formatted.
+ */
+int vfs_check_format(vfs_t* vfs, const char* filename);
+
+/**
+ * Validates whether a filesystem can be mounted at the given path.
+ * Checks mount-point rules, duplicate mounts, and target directory validity.
+ */
+int vfs_check_mount(vfs_t* vfs, const char* mount_path, const char* disk_filename);
 
 /**
  * Registers an already initialized filesystem into the VFS at the specified path.

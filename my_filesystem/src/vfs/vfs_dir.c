@@ -1,4 +1,6 @@
 #include "vfs.h"
+#include <stdio.h>
+#include <string.h>
 
 int vfs_mkdir(vfs_t* vfs, const char* path, uint16_t permissions) {
     if (!vfs || !path) return ERROR_INVALID;
@@ -34,7 +36,14 @@ int vfs_cd(vfs_t* vfs, const char* path) {
     // resolve path
     int res = vfs_resolve_path(vfs, path, &target_fs, local_path, sizeof(local_path),
                                 abs_path, sizeof(abs_path));
+
     if (res != SUCCESS) return res;
+
+    // special case for root: no need to check if it's a directory
+    if (strcmp(abs_path, "/") == 0) {
+        strcpy(vfs->cwd, "/");
+        return SUCCESS;
+    }
     
     // check if directory exists on disk
     struct inode dir_inode;

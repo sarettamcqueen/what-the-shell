@@ -73,14 +73,16 @@
 #define SUPERBLOCK_BLOCK_NUM 0   // superblock location (fixed)
 
 // === COMMON ERROR CODES ===
-#define SUCCESS           0
-#define ERROR_GENERIC    -1
-#define ERROR_NOT_FOUND  -2
-#define ERROR_EXISTS     -3
-#define ERROR_NO_SPACE   -4
-#define ERROR_INVALID    -5
-#define ERROR_IO         -6
-#define ERROR_PERMISSION -7
+#define SUCCESS              0
+#define ERROR_GENERIC       -1
+#define ERROR_NOT_FOUND     -2
+#define ERROR_EXISTS        -3
+#define ERROR_NO_SPACE      -4
+#define ERROR_INVALID       -5
+#define ERROR_IO            -6
+#define ERROR_PERMISSION    -7
+#define ERROR_ROOT_REQUIRED -8
+#define ERROR_BUSY          -9
 
 // === SHARED STRUCTURES ===
 

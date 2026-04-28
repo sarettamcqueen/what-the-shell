@@ -1,5 +1,8 @@
 #include "vfs.h"
 #include "path.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
 int vfs_resolve_path(vfs_t* vfs, const char* path, filesystem_t** out_fs, 
                      char* out_local_path, size_t local_size,

@@ -1,4 +1,6 @@
 #include "vfs.h"
+#include "fs.h"
+#include "disk.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -12,9 +14,68 @@ void vfs_init(vfs_t* vfs) {
     }
 }
 
+int vfs_check_format(vfs_t* vfs, const char* filename) {
+    if (!vfs || !filename) return ERROR_INVALID;
+
+    // check if disk is mounted
+    for (uint32_t i = 0; i < vfs->count; i++) {
+        const char* mounted_disk = disk_get_filename(vfs->mounts[i].fs->disk);
+        if (strcmp(mounted_disk, filename) == 0) {
+            return ERROR_BUSY;
+        }
+    }
+    
+    return SUCCESS;
+}
+
+int vfs_check_mount(vfs_t* vfs, const char* mount_path, const char* disk_filename) {
+    if (!vfs || !mount_path || !disk_filename) return ERROR_INVALID;
+
+    // first disk must always be mounted on root "/"
+    if (vfs->count == 0 && strcmp(mount_path, "/") != 0) {
+        return ERROR_ROOT_REQUIRED;
+    }
+
+    if (vfs->count > 0) {
+        // check if mount_path is already in use
+        for (uint32_t i = 0; i < vfs->count; i++) {
+            if (strcmp(vfs->mounts[i].mount_path, mount_path) == 0) {
+                return ERROR_EXISTS;
+            }
+            // avoid mounting same disk on different mount points
+            const char* existing_disk = disk_get_filename(vfs->mounts[i].fs->disk);
+            if (strcmp(existing_disk, disk_filename) == 0) {
+                return ERROR_INVALID; 
+            }
+        }
+
+        // check if mount point is a valid directory
+        filesystem_t* target_fs = NULL;
+        char local_path[MAX_PATH];
+        char abs_path[MAX_PATH];
+        int ret = vfs_resolve_path(vfs, mount_path, &target_fs, local_path, sizeof(local_path), abs_path, sizeof(abs_path));
+        
+        if (ret != SUCCESS) return ERROR_NOT_FOUND;
+
+        struct inode st;
+        uint32_t target_inode;
+        ret = fs_stat(target_fs, local_path, &st, &target_inode, NULL, 0);
+        if (ret != SUCCESS || st.type != INODE_TYPE_DIRECTORY) {
+            return ERROR_INVALID;
+        }
+    }
+
+    return SUCCESS;
+}
+
 int vfs_mount(vfs_t* vfs, const char* mount_path, filesystem_t* fs) {
     if (!vfs || !mount_path || !fs) return ERROR_INVALID;
     if (vfs->count >= MAX_MOUNTS) return ERROR_NO_SPACE;
+
+    // first disk must always be mounted on root "/"
+    if (vfs->count == 0 && strcmp(mount_path, "/") != 0) {
+        return ERROR_ROOT_REQUIRED;
+    }
 
     // check if path is already in use (to avoid mounting two disks on same point)
     for (int i = 0; i < MAX_MOUNTS; i++) {
@@ -62,7 +123,6 @@ int vfs_unmount(vfs_t* vfs, const char* mount_path) {
             vfs->mounts[i].fs = NULL;
             vfs->count--;
             
-            // Opzionale: Se la CWD dell'utente era dentro il disco smontato, lo riportiamo alla root di emergenza
             if (path_starts_with(vfs->cwd, normalized_path)) {
                 strcpy(vfs->cwd, "/");
             }

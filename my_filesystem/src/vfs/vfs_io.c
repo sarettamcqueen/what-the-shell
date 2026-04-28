@@ -6,7 +6,7 @@ int vfs_open(vfs_t* vfs, const char* path, uint32_t flags, open_file_t** out_fil
     filesystem_t* target_fs = NULL;
     char local_path[MAX_PATH];
     
-    // to open a file, we need to know to which disk it belongs
+    // resolve path to determine which filesystem contains the file
     int res = vfs_resolve_path(vfs, path, &target_fs, local_path, sizeof(local_path), NULL, 0);
     if (res != SUCCESS) return res;
     

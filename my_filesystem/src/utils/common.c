@@ -5,15 +5,17 @@
 
 const char* error_string(int error_code) {
     switch (error_code) {
-        case SUCCESS:           return "Success";
-        case ERROR_GENERIC:     return "Generic error";
-        case ERROR_NOT_FOUND:   return "File or directory not found";
-        case ERROR_EXISTS:      return "File or directory already exists";
-        case ERROR_NO_SPACE:    return "No space left on device";
-        case ERROR_INVALID:     return "Invalid argument";
-        case ERROR_IO:          return "I/O error";
-        case ERROR_PERMISSION:  return "Permission denied";
-        default:                return "Unknown error";
+        case SUCCESS:               return "Success";
+        case ERROR_GENERIC:         return "Generic error";
+        case ERROR_NOT_FOUND:       return "File or directory not found";
+        case ERROR_EXISTS:          return "File or directory already exists";
+        case ERROR_NO_SPACE:        return "No space left on device";
+        case ERROR_INVALID:         return "Invalid argument";
+        case ERROR_IO:              return "I/O error";
+        case ERROR_PERMISSION:      return "Permission denied";
+        case ERROR_ROOT_REQUIRED:   return "First mount must be on root directory '/'";
+        case ERROR_BUSY:            return "Device or resource busy";
+        default:                    return "Unknown error";
     }
 }
 

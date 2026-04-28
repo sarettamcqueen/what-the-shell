@@ -1,4 +1,5 @@
 #include "vfs.h"
+#include <stdio.h>
 
 int vfs_stat(vfs_t* vfs, const char* path, struct inode* out_inode,
             uint32_t* out_inode_num, char* out_abs_path, size_t abs_size) {

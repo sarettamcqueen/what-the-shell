@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stddef.h>
-#include "fs.h"
+#include "vfs.h"
 #include "parser.h"
 
 #define SHELL_EXIT 999
@@ -15,4 +15,4 @@ void shell_run(void);
 /**
  * Dispatches a parsed command to the correct handler.
  */
-int shell_dispatch(filesystem_t** current_fs, int argc, char** argv);
+int shell_dispatch(vfs_t* vfs, int argc, char** argv);
