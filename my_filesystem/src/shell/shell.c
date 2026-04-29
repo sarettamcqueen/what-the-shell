@@ -88,12 +88,7 @@ void shell_run(void) {
     }
 
     free(line);
-
-    for (int i = 0; i < MAX_MOUNTS; i++) {
-        if (my_vfs.mounts[i].is_active) {
-            vfs_unmount(&my_vfs, my_vfs.mounts[i].mount_path);
-        }
-    }
+    vfs_destroy(&my_vfs);
 }
 
 typedef int (*cmd_fn_t)(vfs_t*, int, char**);
@@ -155,10 +150,10 @@ static const cmd_entry_t shell_cmds[] = {
     { "mkdir",   cmd_mkdir   },
     { "rmdir",   cmd_rmdir   },
     { "ln",      cmd_ln      },
-    { "cp",      cmd_cp      }, // Nuovo comando
-    { "mv",      cmd_mv      }, // Nuovo comando
+    { "cp",      cmd_cp      },
+    { "mv",      cmd_mv      },
     { "stat",    cmd_stat    },
-    { "df",      cmd_df      }, // Ex fsinfo
+    { "df",      cmd_df      },
     { NULL, NULL }
 };
 

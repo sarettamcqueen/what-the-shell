@@ -35,10 +35,10 @@
  * Represents a single mount point within the Virtual File System.
  */
 typedef struct vfs_mount {
-    filesystem_t* fs;                 // Pointer to the underlying filesystem instance
-    size_t path_len;                  // Cached length of the mount path for faster prefix matching
-    bool is_active;                   // True if this slot is currently in use
-    char mount_path[MAX_PATH];        // Absolute path where the fs is mounted (e.g., "/mnt/usb")
+    filesystem_t* fs;                 // pointer to the underlying filesystem instance
+    size_t path_len;                  // cached length of the mount path for faster prefix matching
+    bool is_active;                   // true if this slot is currently in use
+    char mount_path[MAX_PATH];        // absolute path where the fs is mounted (e.g., "/mnt/usb")
 } vfs_mount_t;
 
 /**
@@ -46,9 +46,9 @@ typedef struct vfs_mount {
  * Manages the mount table and the unified current working directory.
  */
 typedef struct vfs {
-    uint32_t count;                   // Number of currently active mounts
-    vfs_mount_t mounts[MAX_MOUNTS];   // Table of all mounted filesystems
-    char cwd[MAX_PATH];               // Global unified Current Working Directory
+    uint32_t count;                   // number of currently active mounts
+    vfs_mount_t mounts[MAX_MOUNTS];   // table of all mounted filesystems
+    char cwd[MAX_PATH];               // global unified Current Working Directory
 } vfs_t;
 
 
@@ -60,23 +60,37 @@ typedef struct vfs {
 void vfs_init(vfs_t* vfs);
 
 /**
- * Checks whether the specified disk image can be safely formatted.
+ * Unmounts all active filesystems in reverse order and frees their resources.
+ * Must be called on shell exit to avoid memory leaks and ensure all data is
+ * flushed to disk.
  */
-int vfs_check_format(vfs_t* vfs, const char* filename);
+void vfs_destroy(vfs_t* vfs);
 
 /**
- * Validates whether a filesystem can be mounted at the given path.
- * Checks mount-point rules, duplicate mounts, and target directory validity.
+ * Formats a disk image with a new filesystem of the given size.
+ * Aligns size_bytes to the nearest block boundary before formatting.
+ * Fails with ERROR_BUSY if the disk is currently mounted in the VFS.
  */
-int vfs_check_mount(vfs_t* vfs, const char* mount_path, const char* disk_filename);
+int vfs_format(vfs_t* vfs, const char* filename, uint64_t size_bytes);
+
 
 /**
- * Registers an already initialized filesystem into the VFS at the specified path.
+ * Mounts a disk image at the specified path in the VFS.
+ * Resolves mount_path to absolute before registering it in the mount table,
+ * so relative paths and "." are handled correctly at lookup time.
+ * The first mount must always be on "/". Fails with ERROR_BUSY if the same
+ * disk is already mounted, ERROR_EXISTS if the mount point is already in use,
+ * and ERROR_NOT_FOUND if the mount point directory does not exist.
  */
-int vfs_mount(vfs_t* vfs, const char* mount_path, filesystem_t* fs);
+int vfs_mount(vfs_t* vfs, const char* filename, const char* mount_path);
+
 
 /**
- * Safely unmounts the filesystem at the specified path, saving its state to disk.
+ * Unmounts the filesystem at the specified path, flushing its state to disk.
+ * Resolves mount_path to absolute before searching the mount table, so
+ * relative paths and "." work correctly. Returns ERROR_BUSY if the path is
+ * "/" or if the current working directory is inside the filesystem being
+ * unmounted.
  */
 int vfs_unmount(vfs_t* vfs, const char* mount_path);
 

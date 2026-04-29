@@ -19,9 +19,13 @@ int vfs_rmdir(vfs_t* vfs, const char* path) {
 
     filesystem_t* fs = NULL;
     char local_path[MAX_PATH];
+    char abs_path[MAX_PATH];
     
-    int res = vfs_resolve_path(vfs, path, &fs, local_path, sizeof(local_path), NULL, 0);
+    int res = vfs_resolve_path(vfs, path, &fs, local_path, sizeof(local_path), abs_path, sizeof(abs_path));
     if (res != SUCCESS) return res;
+
+    if (path_starts_with(vfs->cwd, abs_path))
+        return ERROR_BUSY;
     
     return fs_rmdir(fs, local_path);
 }

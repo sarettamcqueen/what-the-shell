@@ -14,86 +14,101 @@ void vfs_init(vfs_t* vfs) {
     }
 }
 
-int vfs_check_format(vfs_t* vfs, const char* filename) {
+int vfs_format(vfs_t* vfs, const char* filename, uint64_t size_bytes) {
     if (!vfs || !filename) return ERROR_INVALID;
+    if (size_bytes == 0)   return ERROR_INVALID;
 
-    // check if disk is mounted
-    for (uint32_t i = 0; i < vfs->count; i++) {
+    // check fs isn't already mounted
+    for (int i = 0; i < MAX_MOUNTS; i++) {
+        if (!vfs->mounts[i].is_active) continue;
         const char* mounted_disk = disk_get_filename(vfs->mounts[i].fs->disk);
-        if (strcmp(mounted_disk, filename) == 0) {
+        if (strcmp(mounted_disk, filename) == 0)
             return ERROR_BUSY;
-        }
     }
-    
-    return SUCCESS;
+
+    // align size_bytes to block size
+    uint64_t aligned = size_bytes;
+    if (size_bytes % BLOCK_SIZE != 0)
+        aligned = size_bytes + (BLOCK_SIZE - (size_bytes % BLOCK_SIZE));
+
+    disk_t disk;
+    int ret = disk_attach(filename, (long long)aligned, true, &disk);
+    if (ret != DISK_SUCCESS) return ERROR_IO;
+
+    uint32_t total_blocks = (uint32_t)(aligned / BLOCK_SIZE);
+    uint32_t total_inodes = (uint32_t)(aligned / BYTES_PER_INODE);
+
+    if (total_inodes % INODES_PER_BLOCK != 0)
+        total_inodes += INODES_PER_BLOCK - (total_inodes % INODES_PER_BLOCK);
+    if (total_inodes < MIN_INODES)
+        total_inodes = MIN_INODES;
+
+    ret = fs_format(disk, total_blocks, total_inodes);
+    disk_detach(disk);
+
+    return ret;
 }
 
-int vfs_check_mount(vfs_t* vfs, const char* mount_path, const char* disk_filename) {
-    if (!vfs || !mount_path || !disk_filename) return ERROR_INVALID;
+int vfs_mount(vfs_t* vfs, const char* filename, const char* mount_path) {
+    if (!vfs || !filename || !mount_path) return ERROR_INVALID;
+    if (vfs->count >= MAX_MOUNTS)         return ERROR_NO_SPACE;
 
     // first disk must always be mounted on root "/"
-    if (vfs->count == 0 && strcmp(mount_path, "/") != 0) {
+    if (vfs->count == 0 && strcmp(mount_path, "/") != 0)
         return ERROR_ROOT_REQUIRED;
+
+    // avoid mounting same disk on different mount points
+    for (int i = 0; i < MAX_MOUNTS; i++) {
+        if (!vfs->mounts[i].is_active) continue;
+        if (strcmp(disk_get_filename(vfs->mounts[i].fs->disk), filename) == 0)
+            return ERROR_BUSY;
     }
 
+    char abs_mount[MAX_PATH];
     if (vfs->count > 0) {
-        // check if mount_path is already in use
-        for (uint32_t i = 0; i < vfs->count; i++) {
-            if (strcmp(vfs->mounts[i].mount_path, mount_path) == 0) {
-                return ERROR_EXISTS;
-            }
-            // avoid mounting same disk on different mount points
-            const char* existing_disk = disk_get_filename(vfs->mounts[i].fs->disk);
-            if (strcmp(existing_disk, disk_filename) == 0) {
-                return ERROR_INVALID; 
-            }
-        }
-
-        // check if mount point is a valid directory
-        filesystem_t* target_fs = NULL;
+        filesystem_t* tmp_fs  = NULL;
         char local_path[MAX_PATH];
-        char abs_path[MAX_PATH];
-        int ret = vfs_resolve_path(vfs, mount_path, &target_fs, local_path, sizeof(local_path), abs_path, sizeof(abs_path));
-        
+        int ret = vfs_resolve_path(vfs, mount_path, &tmp_fs,
+                                   local_path, sizeof(local_path),
+                                   abs_mount,  sizeof(abs_mount));
         if (ret != SUCCESS) return ERROR_NOT_FOUND;
 
+        // check if mount point is a valid directory
         struct inode st;
-        uint32_t target_inode;
-        ret = fs_stat(target_fs, local_path, &st, &target_inode, NULL, 0);
-        if (ret != SUCCESS || st.type != INODE_TYPE_DIRECTORY) {
+        ret = fs_stat(tmp_fs, local_path, &st, NULL, NULL, 0);
+        if (ret != SUCCESS || st.type != INODE_TYPE_DIRECTORY)
             return ERROR_INVALID;
+
+        // check if mount_path is already in use
+        for (int i = 0; i < MAX_MOUNTS; i++) {
+            if (!vfs->mounts[i].is_active) continue;
+            if (strcmp(vfs->mounts[i].mount_path, abs_mount) == 0)
+                return ERROR_EXISTS;
         }
+    } else {
+        // no fs mounted yet: mount_path is "/"
+        strncpy(abs_mount, mount_path, MAX_PATH - 1);
+        abs_mount[MAX_PATH - 1] = '\0';
     }
 
-    return SUCCESS;
-}
+    // open disk and initialize fs
+    disk_t disk;
+    int ret = disk_attach(filename, 0, false, &disk);
+    if (ret != DISK_SUCCESS) return ERROR_IO;
 
-int vfs_mount(vfs_t* vfs, const char* mount_path, filesystem_t* fs) {
-    if (!vfs || !mount_path || !fs) return ERROR_INVALID;
-    if (vfs->count >= MAX_MOUNTS) return ERROR_NO_SPACE;
-
-    // first disk must always be mounted on root "/"
-    if (vfs->count == 0 && strcmp(mount_path, "/") != 0) {
-        return ERROR_ROOT_REQUIRED;
-    }
-
-    // check if path is already in use (to avoid mounting two disks on same point)
-    for (int i = 0; i < MAX_MOUNTS; i++) {
-        if (vfs->mounts[i].is_active && strcmp(vfs->mounts[i].mount_path, mount_path) == 0) {
-            return ERROR_INVALID; // path already in use
-        }
+    filesystem_t* fs = NULL;
+    ret = fs_mount(disk, &fs);
+    if (ret != SUCCESS) {
+        disk_detach(disk);
+        return ret;
     }
 
     // find first free slot
     for (int i = 0; i < MAX_MOUNTS; i++) {
         if (!vfs->mounts[i].is_active) {
-            // fill the slot
-            strncpy(vfs->mounts[i].mount_path, mount_path, MAX_PATH - 1);
+            strncpy(vfs->mounts[i].mount_path, abs_mount, MAX_PATH - 1);
             vfs->mounts[i].mount_path[MAX_PATH - 1] = '\0';
-            
-            // remove final slashes, except for root "/"
             remove_trailing_slashes(vfs->mounts[i].mount_path);
-            
             vfs->mounts[i].path_len = strlen(vfs->mounts[i].mount_path);
             vfs->mounts[i].fs = fs;
             vfs->mounts[i].is_active = true;
@@ -101,34 +116,60 @@ int vfs_mount(vfs_t* vfs, const char* mount_path, filesystem_t* fs) {
             return SUCCESS;
         }
     }
-    
+
+    fs_unmount(fs);
     return ERROR_NO_SPACE;
 }
 
 int vfs_unmount(vfs_t* vfs, const char* mount_path) {
     if (!vfs || !mount_path) return ERROR_INVALID;
 
-    char normalized_path[MAX_PATH];
-    strncpy(normalized_path, mount_path, MAX_PATH - 1);
-    normalized_path[MAX_PATH - 1] = '\0';
-    remove_trailing_slashes(normalized_path);
+    // resolve to absolute before searching the mount table,
+    // so relative paths and "." work correctly
+    char abs_path[MAX_PATH];
+    filesystem_t* tmp_fs = NULL;
+    char tmp_local[MAX_PATH];
+
+    int res = vfs_resolve_path(vfs, mount_path, &tmp_fs, tmp_local,
+                               sizeof(tmp_local), abs_path, sizeof(abs_path));
+    if (res != SUCCESS) return res;
+
+    remove_trailing_slashes(abs_path);
 
     for (int i = 0; i < MAX_MOUNTS; i++) {
-        if (vfs->mounts[i].is_active && strcmp(vfs->mounts[i].mount_path, normalized_path) == 0) {
-            // found it, we free the slot
-            int res = fs_unmount(vfs->mounts[i].fs);
-            if (res != SUCCESS) return res;
+        if (!vfs->mounts[i].is_active) continue;
+        if (strcmp(vfs->mounts[i].mount_path, abs_path) != 0) continue;
 
-            vfs->mounts[i].is_active = false;
-            vfs->mounts[i].fs = NULL;
-            vfs->count--;
-            
-            if (path_starts_with(vfs->cwd, normalized_path)) {
-                strcpy(vfs->cwd, "/");
-            }
-            
-            return SUCCESS;
-        }
+        // can't unmount root during an active session
+        if (strcmp(abs_path, "/") == 0)
+            return ERROR_BUSY;
+        
+        // cannot unmount a filesystem while cwd is inside it
+        if (path_starts_with(vfs->cwd, abs_path))
+            return ERROR_BUSY;
+
+        res = fs_unmount(vfs->mounts[i].fs);
+        if (res != SUCCESS) return res;
+
+        vfs->mounts[i].is_active = false;
+        vfs->mounts[i].fs        = NULL;
+        vfs->count--;
+
+        return SUCCESS;
     }
-    return ERROR_NOT_FOUND; // Nessun disco montato in quel path
+
+    return ERROR_NOT_FOUND;
+}
+
+void vfs_destroy(vfs_t* vfs) {
+    if (!vfs) return;
+
+    // unmount in reverse order so nested mounts are freed before their parent
+    for (int i = MAX_MOUNTS - 1; i >= 0; i--) {
+        if (!vfs->mounts[i].is_active) continue;
+        fs_unmount(vfs->mounts[i].fs);
+        vfs->mounts[i].is_active = false;
+        vfs->mounts[i].fs = NULL;
+        vfs->count--;
+    }
 }

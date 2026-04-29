@@ -22,47 +22,6 @@ static const char* fs_error_to_string(int code) {
     }
 }
 
-// helper: if 'dst' is a directory, builds 'dst/basename(src)'
-static int shell_build_dest_path(vfs_t* vfs, const char* src, const char* dst, char* final_dst) {
-    strncpy(final_dst, dst, MAX_PATH);
-
-    filesystem_t* target_fs = NULL;
-    char local_path[MAX_PATH];
-    char abs_path[MAX_PATH];
-    
-    // resolve dest path to see if it exists
-    int ret = vfs_resolve_path(vfs, dst, &target_fs, local_path, sizeof(local_path), abs_path, sizeof(abs_path));
-    
-    if (ret == SUCCESS && target_fs != NULL) {
-        // if it's a directory, append filename
-        struct inode st;
-        uint32_t target_inode;
-        if (fs_stat(target_fs, local_path, &st, &target_inode, NULL, 0) == SUCCESS) {
-            if (st.type == INODE_TYPE_DIRECTORY) {
-                char* base_name = path_get_basename(src);
-                if (base_name != NULL) {
-                    size_t dst_len = strlen(dst);
-                    int written;
-
-                    if (dst_len > 0 && dst[dst_len - 1] == '/') {
-                        written = snprintf(final_dst, MAX_PATH, "%s%s", dst, base_name);
-                    } else {
-                        written = snprintf(final_dst, MAX_PATH, "%s/%s", dst, base_name);
-                    }
-
-                    free(base_name);
-
-                    if (written < 0 || written >= MAX_PATH) {
-                        printf("cp: resulting path is too long\n");
-                        return ERROR_GENERIC;
-                    }
-                }
-            }
-        }
-    }
-    return SUCCESS;
-}
-
 void print_fs_error(const char* cmd, int code, const char* path) {
     const char* msg = fs_error_to_string(code);
 
@@ -80,119 +39,45 @@ static const char* inode_type_to_string(uint8_t type) {
     }
 }
 
-// format <diskname> <size>
 int cmd_format(vfs_t* vfs, int argc, char** argv) {
-    (void)vfs;
     if (argc != 3) {
         printf("Usage: format <diskname> <size_in_bytes>\n");
         return ERROR_INVALID;
     }
 
-    const char* filename = argv[1];
     int input_size = atoi(argv[2]);
-
     if (input_size <= 0) {
         printf("format: invalid size '%s'\n", argv[2]);
         return ERROR_INVALID;
     }
 
-    int check = vfs_check_format(vfs, filename);
-    if (check != SUCCESS) {
-        print_fs_error("format", check, filename);
-        return check;
-    }
-
     int remainder = input_size % BLOCK_SIZE;
-    long long aligned_size = input_size;
-
+    long long aligned = input_size;
     if (remainder != 0) {
-        aligned_size = input_size + (BLOCK_SIZE - remainder);
+        aligned = input_size + (BLOCK_SIZE - remainder);
         printf("format: size %d is not aligned to %d bytes, rounding up to %lld\n",
-               input_size, BLOCK_SIZE, aligned_size);
+               input_size, BLOCK_SIZE, aligned);
     }
 
-    disk_t disk;
-    int ret = disk_attach(filename, aligned_size, true, &disk);
-    if (ret != DISK_SUCCESS) {
-        printf("format: cannot attach %s\n", filename);
-        return ERROR_IO;
-    }
+    int ret = vfs_format(vfs, argv[1], (uint64_t)aligned);
+    if (ret != SUCCESS)
+        print_fs_error("format", ret, argv[1]);
 
-    uint64_t total_bytes = (uint64_t)aligned_size;
-    uint32_t total_inodes = total_bytes / BYTES_PER_INODE;
-    uint32_t total_blocks = total_bytes / BLOCK_SIZE;
-
-    // round up to next multiple of INODES_PER_BLOCK
-    if (total_inodes % INODES_PER_BLOCK != 0) {
-        total_inodes += INODES_PER_BLOCK - (total_inodes % INODES_PER_BLOCK);
-    }
-    if (total_inodes < MIN_INODES) total_inodes = MIN_INODES;
-
-    ret = fs_format(disk, total_blocks, total_inodes);
-    if (ret != SUCCESS) {
-        printf("format: failed to format '%s'\n", filename);
-        disk_detach(disk);
-        return ret;
-    }
-
-    printf("Filesystem '%s' formatted (%lld bytes, %d blocks, %u inodes)\n",
-           filename, aligned_size, total_blocks, total_inodes);
-
-    disk_detach(disk);
-    return SUCCESS;
+    return ret;
 }
 
-// mount
 int cmd_mount(vfs_t* vfs, int argc, char** argv) {
     if (argc != 3) {
         printf("Usage: mount <disk.img> <mount_path>\n");
         return ERROR_INVALID;
     }
 
-    char* filename = argv[1];
-    char* mount_path = argv[2];
-
-    int check = vfs_check_mount(vfs, mount_path, filename);
-    if (check != SUCCESS) {
-        if (check == ERROR_ROOT_REQUIRED) {
-            print_fs_error("mount", check, mount_path);
-        } else if (check == ERROR_EXISTS) {
-            print_fs_error("mount", check, mount_path);
-        } else if (check == ERROR_NOT_FOUND) {
-            printf("mount: mount point '%s' does not exist.\n", mount_path);
-        } else {
-            printf("mount: invalid operation. Disk might be mounted already or path is not a directory.\n");
-        }
-        return check;
-    }
-
-    disk_t disk;
-    int ret = disk_attach(filename, 0, false, &disk);
-    if (ret != DISK_SUCCESS) {
-        printf("mount: cannot open disk '%s'\n", filename);
-        return ERROR_IO;
-    }
-
-    filesystem_t* fs = NULL;
-    ret = fs_mount(disk, &fs);
-    if (ret != SUCCESS) {
-        printf("mount: failed to initialize filesystem on '%s'\n", filename);
-        disk_detach(disk);
-        return ret;
-    }
-
-    ret = vfs_mount(vfs, mount_path, fs);
-    if (ret != SUCCESS) {
-        print_fs_error("mount", ret, mount_path);
-        fs_unmount(fs);
-        return ret;
-    }
-
-    printf("Mounted %s on %s\n", filename, mount_path);
-    return SUCCESS;
+    int ret = vfs_mount(vfs, argv[1], argv[2]);
+    if (ret != SUCCESS)
+        print_fs_error("mount", ret, argv[2]);
+    return ret;
 }
 
-// unmount
 int cmd_unmount(vfs_t* vfs, int argc, char** argv) {
     if (argc != 2) {
         printf("Usage: unmount <mount_path>\n");
@@ -209,7 +94,6 @@ int cmd_unmount(vfs_t* vfs, int argc, char** argv) {
     return SUCCESS;
 }
 
-// pwd
 int cmd_pwd(vfs_t* vfs, int argc, char** argv) {
     (void)argv;
     if (argc != 1) {
@@ -227,7 +111,6 @@ int cmd_pwd(vfs_t* vfs, int argc, char** argv) {
     return SUCCESS;
 }
 
-// cd
 int cmd_cd(vfs_t* vfs, int argc, char** argv) {
     if (argc != 2) {
         printf("Usage: cd <path>\n");
@@ -239,7 +122,6 @@ int cmd_cd(vfs_t* vfs, int argc, char** argv) {
     return ret;
 }
 
-// mkdir
 int cmd_mkdir(vfs_t* vfs, int argc, char** argv) {
     if (argc != 2) {
         printf("Usage: mkdir <dir>\n");
@@ -251,7 +133,6 @@ int cmd_mkdir(vfs_t* vfs, int argc, char** argv) {
     return ret;
 }
 
-// rmdir
 int cmd_rmdir(vfs_t* vfs, int argc, char** argv) {
     if (argc != 2) {
         printf("Usage: rmdir <dir>\n");
@@ -263,7 +144,6 @@ int cmd_rmdir(vfs_t* vfs, int argc, char** argv) {
     return ret;
 }
 
-// touch
 int cmd_touch(vfs_t* vfs, int argc, char** argv) {
     if (argc != 2) {
         printf("Usage: touch <file>\n");
@@ -275,7 +155,6 @@ int cmd_touch(vfs_t* vfs, int argc, char** argv) {
     return ret;
 }
 
-// rm
 int cmd_rm(vfs_t* vfs, int argc, char** argv) {
     if (argc != 2) {
         printf("Usage: rm <file>\n");
@@ -287,50 +166,20 @@ int cmd_rm(vfs_t* vfs, int argc, char** argv) {
     return ret;
 }
 
-//cp
 int cmd_cp(vfs_t* vfs, int argc, char** argv) {
-    if (argc != 3) {
-        printf("Usage: cp <src> <dst>\n");
-        return ERROR_INVALID;
-    }
-
-    char* src = argv[1];
-    char* dst = argv[2];
-    char final_dst[MAX_PATH];
-
-    int ret = shell_build_dest_path(vfs, src, dst, final_dst);
-    if (ret != SUCCESS) return ret;
-
-    ret = vfs_cp(vfs, src, final_dst);
-
-    if (ret != SUCCESS) {
-        print_fs_error("cp", ret, src);
-    }
-    
+    if (argc != 3) { printf("Usage: cp <src> <dst>\n"); return ERROR_INVALID; }
+    int ret = vfs_cp(vfs, argv[1], argv[2]);
+    if (ret != SUCCESS) print_fs_error("cp", ret, argv[1]);
     return ret;
 }
 
-// mv
 int cmd_mv(vfs_t* vfs, int argc, char** argv) {
-    if (argc != 3) {
-        printf("Usage: mv <src> <dest>\n");
-        return ERROR_INVALID;
-    }
-
-    char* src = argv[1];
-    char* dst = argv[2];
-    char final_dst[MAX_PATH];
-
-    int ret = shell_build_dest_path(vfs, src, dst, final_dst);
-    if (ret != SUCCESS) return ret;
-
-    ret = vfs_mv(vfs, src, final_dst);
-    if (ret != SUCCESS)
-        print_fs_error("mv", ret, src);
+    if (argc != 3) { printf("Usage: mv <src> <dst>\n"); return ERROR_INVALID; }
+    int ret = vfs_mv(vfs, argv[1], argv[2]);
+    if (ret != SUCCESS) print_fs_error("mv", ret, argv[1]);
     return ret;
 }
 
-// cat
 int cmd_cat(vfs_t* vfs, int argc, char** argv) {
     if (argc != 2) {
         printf("Usage: cat <file>\n");
@@ -366,7 +215,6 @@ int cmd_cat(vfs_t* vfs, int argc, char** argv) {
     return SUCCESS;
 }
 
-// write
 int cmd_write(vfs_t* vfs, int argc, char** argv) {
     if (argc != 3) {
         printf("Usage: write <file> \"text\"\n");
@@ -390,7 +238,6 @@ int cmd_write(vfs_t* vfs, int argc, char** argv) {
     return ret;
 }
 
-// append
 int cmd_append(vfs_t* vfs, int argc, char** argv) {
     if (argc != 3) {
         printf("Usage: append <file> \"text\"\n");
@@ -414,8 +261,11 @@ int cmd_append(vfs_t* vfs, int argc, char** argv) {
     return ret;
 }
 
-// ls
 int cmd_ls(vfs_t* vfs, int argc, char** argv) {
+    if (argc > 2) {
+        printf("Usage: ls [path]\n");
+        return ERROR_INVALID;
+    }
     const char* path = (argc == 2) ? argv[1] : ".";
 
     struct dentry* list;
@@ -435,7 +285,6 @@ int cmd_ls(vfs_t* vfs, int argc, char** argv) {
     return SUCCESS;
 }
 
-// ln
 int cmd_ln(vfs_t* vfs, int argc, char** argv) {
     if (argc != 3) {
         printf("Usage: ln <src> <dest>\n");
@@ -448,7 +297,6 @@ int cmd_ln(vfs_t* vfs, int argc, char** argv) {
     return ret;
 }
 
-// stat
 int cmd_stat(vfs_t* vfs, int argc, char** argv) {
     if (argc != 2) {
         printf("Usage: stat <path>\n");
