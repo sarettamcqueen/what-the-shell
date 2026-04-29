@@ -225,7 +225,7 @@ int fs_rmdir(filesystem_t* fs, const char* path) {
     free(entries);
 
     if (non_special > 0) {
-        return ERROR_GENERIC;
+        return ERROR_BUSY;
     }
 
     char* normalized = path_normalize(path);
