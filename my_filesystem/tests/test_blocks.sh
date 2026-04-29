@@ -21,7 +21,7 @@ echo "Filling up data blocks..."
 BLOCK="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 for i in {1..500}; do
-    echo 'append /big_file.txt "%s"\n' "$BLOCK" >> "$CMDS"
+    echo "append /big_file.txt \"$BLOCK\"" >> "$CMDS"
 done
 
 echo "df" >> $CMDS
