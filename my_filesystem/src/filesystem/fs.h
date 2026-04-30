@@ -41,6 +41,7 @@ typedef struct open_file {
 #define FS_O_RDONLY    0x01           // open for reading only
 #define FS_O_WRONLY    0x02           // open for writing only
 #define FS_O_RDWR      0x03           // open for reading and writing
+#define FS_O_ACCMODE   0x03           // MASK to extract the access mode bits
 #define FS_O_CREAT     0x08           // create file if it doesn't exist
 #define FS_O_APPEND    0x10           // append writes to end of file
 #define FS_O_TRUNC     0x20           // truncate file upon opening
@@ -208,6 +209,8 @@ int fs_rmdir(filesystem_t* fs, const char* path);
  * @return SUCCESS or error code
  */
 int fs_link(filesystem_t* fs, const char* existing_path, const char* new_path);
+
+int fs_chmod(filesystem_t* fs, const char* local_path, uint16_t permissions);
 
 // === DIRECTORY LISTING ===
 

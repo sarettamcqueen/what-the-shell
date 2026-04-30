@@ -1,5 +1,6 @@
 #include "fs.h"
 #include "fs_internal.h"
+#include "permissions.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,23 +21,24 @@ int fs_create(filesystem_t* fs, const char* path, uint16_t permissions) {
     // allocate inode
     struct inode new_inode;
     uint32_t new_inode_num;
-    if (inode_alloc(fs->disk, fs->inode_bitmap, INODE_TYPE_FILE, permissions,
-                    &new_inode, &new_inode_num) != SUCCESS) {
-        return ERROR_NO_SPACE;
-    }
+    res = inode_alloc(fs->disk, fs->inode_bitmap, INODE_TYPE_FILE, permissions,
+                    &new_inode, &new_inode_num);
+    if (res != SUCCESS) return res;
     fs->sb.free_inodes--;
 
     // create dentry
     struct dentry new_dentry;
-    if (dentry_create(filename, new_inode_num, INODE_TYPE_FILE, &new_dentry) != SUCCESS) {
-        status = ERROR_INVALID;
+    res = dentry_create(filename, new_inode_num, INODE_TYPE_FILE, &new_dentry);
+    if (res != SUCCESS) {
+        status = res;
         goto cleanup_inode;
     }
 
     uint32_t allocated_blocks = 0;
     // add to parent directory
-    if (dentry_add(fs->disk, parent_inode_num, &new_dentry, fs->block_bitmap, &allocated_blocks) != SUCCESS) {
-        status = ERROR_IO;
+    res = dentry_add(fs->disk, parent_inode_num, &new_dentry, fs->block_bitmap, &allocated_blocks);
+    if (res != SUCCESS) {
+        status = res;
         goto cleanup_inode;
     }
     fs->sb.free_blocks -= allocated_blocks;
@@ -51,9 +53,7 @@ int fs_create(filesystem_t* fs, const char* path, uint16_t permissions) {
 
     // update superblock and save
     save_bitmaps(fs);
-    superblock_write(fs->disk, &fs->sb);
-
-    return SUCCESS;
+    return superblock_write(fs->disk, &fs->sb);
 
     cleanup_remove_parent_dentry:
         dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, parent_inode_num, filename);
@@ -96,6 +96,11 @@ int fs_link(filesystem_t* fs, const char* existing_path, const char* new_path) {
         return ERROR_INVALID;
     }
 
+    // check permission to read source file
+    if (!perm_can_read(&inode)) {
+        return ERROR_PERMISSION;
+    }
+
     char* normalized = path_normalize(new_path);
     if (!normalized) {
         return ERROR_INVALID;
@@ -125,6 +130,13 @@ int fs_link(filesystem_t* fs, const char* existing_path, const char* new_path) {
         return ERROR_INVALID;
     }
 
+    struct inode parent_inode;
+    if (inode_read(fs->disk, parent_inode_num, &parent_inode) != SUCCESS)
+        return ERROR_IO;
+    if (!perm_can_write(&parent_inode)) {
+        return ERROR_PERMISSION;
+    }
+
     // check if new path exists
     if (dentry_find(fs->disk, parent_inode_num, filename, NULL, NULL) == SUCCESS) {
         return ERROR_EXISTS;
@@ -132,13 +144,13 @@ int fs_link(filesystem_t* fs, const char* existing_path, const char* new_path) {
 
     // create new dentry pointing to same inode
     struct dentry new_dentry;
-    dentry_create(filename, existing_inode_num, inode.type, &new_dentry);
+    res = dentry_create(filename, existing_inode_num, inode.type, &new_dentry);
+    if (res != SUCCESS) return res;
 
     uint32_t allocated_blocks = 0;
 
-    if (dentry_add(fs->disk, parent_inode_num, &new_dentry, fs->block_bitmap, &allocated_blocks) != SUCCESS) {
-        return ERROR_IO;
-    }
+    res = dentry_add(fs->disk, parent_inode_num, &new_dentry, fs->block_bitmap, &allocated_blocks);
+    if (res != SUCCESS) return res;
     fs->sb.free_blocks -= allocated_blocks;
 
     // increment link count
@@ -152,11 +164,9 @@ int fs_link(filesystem_t* fs, const char* existing_path, const char* new_path) {
     }
 
     save_bitmaps(fs);
-    if (superblock_write(fs->disk, &fs->sb) != SUCCESS) {
-        return ERROR_IO;
-    }
+    res = superblock_write(fs->disk, &fs->sb);
 
-    return SUCCESS;
+    return res;
 }
 
 int fs_unlink(filesystem_t* fs, const char* path) {
@@ -203,6 +213,15 @@ int fs_unlink(filesystem_t* fs, const char* path) {
     res = fs_path_to_inode(fs, parent_path, &parent_inode_num);
     if (res != SUCCESS) return res;
 
+    // check write permission on parent directory
+    struct inode parent_inode;
+    if (inode_read(fs->disk, parent_inode_num, &parent_inode) != SUCCESS) {
+        return ERROR_IO;
+    }
+    if (!perm_can_write(&parent_inode)) {
+        return ERROR_PERMISSION;
+    }
+
     res = dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, parent_inode_num, filename);
     if (res != SUCCESS) return res;
 
@@ -228,9 +247,7 @@ int fs_unlink(filesystem_t* fs, const char* path) {
 
     // save
     if (save_bitmaps(fs) != SUCCESS) return ERROR_IO;
-    if (superblock_write(fs->disk, &fs->sb) != SUCCESS) return ERROR_IO;
-
-    return SUCCESS;
+    return superblock_write(fs->disk, &fs->sb);
 }
 
 int fs_rename(filesystem_t* fs, const char* old_path, const char* new_path) {
@@ -258,6 +275,15 @@ int fs_rename(filesystem_t* fs, const char* old_path, const char* new_path) {
     res = fs_path_to_inode(fs, old_parent, &old_parent_inode);
     if (res != SUCCESS) { free(norm_old); free(norm_new); return res; }
 
+    // check write permission on old parent directory
+    struct inode old_parent_inode_data;
+    if (inode_read(fs->disk, old_parent_inode, &old_parent_inode_data) != SUCCESS) {
+        free(norm_old); free(norm_new); return ERROR_IO;
+    }
+    if (!perm_can_write(&old_parent_inode_data)) {
+        free(norm_old); free(norm_new); return ERROR_PERMISSION;
+    }
+
     struct dentry old_entry;
     res = dentry_find(fs->disk, old_parent_inode, old_name, &old_entry, NULL);
     if (res != SUCCESS) { free(norm_old); free(norm_new); return res; }
@@ -281,6 +307,15 @@ int fs_rename(filesystem_t* fs, const char* old_path, const char* new_path) {
     res = fs_path_to_inode(fs, new_parent, &new_parent_inode);
     if (res != SUCCESS) return res;
 
+    // check write permission on new parent directory
+    struct inode new_parent_inode_data;
+    if (inode_read(fs->disk, new_parent_inode, &new_parent_inode_data) != SUCCESS) {
+        return ERROR_IO;
+    }
+    if (!perm_can_write(&new_parent_inode_data)) {
+        return ERROR_PERMISSION;
+    }
+
     // destination must not exist: overwrite is handled at the VFS layer (vfs_mv)
     if (dentry_find(fs->disk, new_parent_inode, new_name, NULL, NULL) == SUCCESS)
         return ERROR_EXISTS;
@@ -302,7 +337,7 @@ int fs_rename(filesystem_t* fs, const char* old_path, const char* new_path) {
     res = dentry_remove(fs->disk, fs->block_bitmap, &fs->sb,
                         old_parent_inode, old_name);
     if (res != SUCCESS) {
-        // rollback step 1
+        // rollback
         dentry_remove(fs->disk, fs->block_bitmap, &fs->sb,
                       new_parent_inode, new_name);
         fs->sb.free_blocks += allocated_blocks;

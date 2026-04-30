@@ -1,5 +1,6 @@
 #include "fs.h"
 #include "fs_internal.h"
+#include "permissions.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -328,6 +329,16 @@ int fs_open(filesystem_t* fs, const char* path, uint32_t flags, open_file_t** ou
     if (inode.type != INODE_TYPE_FILE) {
         return ERROR_INVALID;
     }
+
+    uint32_t mode = flags & FS_O_ACCMODE;  // access mode bits
+
+    // check read permission if opening for read
+    if ((mode == FS_O_RDONLY || mode == FS_O_RDWR) && !perm_can_read(&inode))
+        return ERROR_PERMISSION;
+ 
+    // check write permission if opening for write
+    if ((mode == FS_O_WRONLY || mode == FS_O_RDWR || (flags & FS_O_TRUNC)) && !perm_can_write(&inode))
+        return ERROR_PERMISSION;
 
     // truncate if requested
     if (flags & FS_O_TRUNC) {

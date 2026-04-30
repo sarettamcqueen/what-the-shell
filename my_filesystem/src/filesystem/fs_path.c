@@ -1,5 +1,6 @@
 #include "fs.h"
 #include "fs_internal.h"
+#include "permissions.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,6 +46,23 @@ if (!fs || !path || !out_inode_num) {
 
     // traverse components
     for (int i = 0; i < pc->count; i++) {
+        struct inode current_dir_inode_data;
+        if (inode_read(fs->disk, current_inode, &current_dir_inode_data) != SUCCESS) {
+            path_components_free(pc);
+            return ERROR_IO;
+        }
+
+        if (current_dir_inode_data.type != INODE_TYPE_DIRECTORY) {
+            path_components_free(pc);
+            return ERROR_INVALID;
+        }
+
+        // check permission to traverse directory (exec)
+        if (!perm_can_execute(&current_dir_inode_data)) {
+            path_components_free(pc);
+            return ERROR_PERMISSION;
+        }
+        
         const char* component = pc->components[i];
 
         // skip "." (should already be handled by normalize, but just in case)

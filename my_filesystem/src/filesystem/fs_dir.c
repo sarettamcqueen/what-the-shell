@@ -1,5 +1,6 @@
 #include "fs.h"
 #include "fs_internal.h"
+#include "permissions.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,8 +49,17 @@ int fs_prepare_create(filesystem_t* fs, const char* path,
     int res = fs_path_to_inode(fs, parent_path, parent_inode_num);
     if (res != SUCCESS) return res;
 
-    if (validate_parent_directory(fs->disk, *parent_inode_num) != SUCCESS)
-        return ERROR_INVALID;
+    res = validate_parent_directory(fs->disk, *parent_inode_num);
+    if (res != SUCCESS) return res;
+
+    // check write permission on parent directory
+    struct inode parent_inode;
+    if (inode_read(fs->disk, *parent_inode_num, &parent_inode) != SUCCESS) {
+        return ERROR_IO;
+    }
+    if (!perm_can_write(&parent_inode)) {
+        return ERROR_PERMISSION;
+    }
 
     // check if name already exists
     struct dentry tmp;
@@ -75,22 +85,23 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
     // allocate inode for directory
     struct inode new_dir_inode;
     uint32_t new_dir_inode_num;
-    if (inode_alloc(fs->disk, fs->inode_bitmap, INODE_TYPE_DIRECTORY, permissions,
-                   &new_dir_inode, &new_dir_inode_num) != SUCCESS) {
-        return ERROR_NO_SPACE;
-    }
+    res = inode_alloc(fs->disk, fs->inode_bitmap, INODE_TYPE_DIRECTORY, permissions,
+                   &new_dir_inode, &new_dir_inode_num);
+    if (res != SUCCESS) return res;
     fs->sb.free_inodes--;
 
     // create dentry in parent directory
     struct dentry new_dentry;
-    if (dentry_create(dirname, new_dir_inode_num, INODE_TYPE_DIRECTORY, &new_dentry) != SUCCESS) {
-        status = ERROR_INVALID;
+    res = dentry_create(dirname, new_dir_inode_num, INODE_TYPE_DIRECTORY, &new_dentry);
+    if (res != SUCCESS) {
+        status = res;
         goto cleanup_inode;
     }
 
     uint32_t parent_dentry_blocks = 0;
-    if (dentry_add(fs->disk, parent_inode_num, &new_dentry, fs->block_bitmap, &parent_dentry_blocks) != SUCCESS) {
-        status = ERROR_IO;
+    res = dentry_add(fs->disk, parent_inode_num, &new_dentry, fs->block_bitmap, &parent_dentry_blocks);
+    if (res != SUCCESS) {
+        status = res;
         goto cleanup_inode;
     }
     fs->sb.free_blocks -= parent_dentry_blocks;
@@ -98,26 +109,30 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
     // add "." and ".." entries
     struct dentry dot, dotdot;
 
-    if (dentry_create(".", new_dir_inode_num, INODE_TYPE_DIRECTORY, &dot) != SUCCESS) {
-        status = ERROR_INVALID;
+    res = dentry_create(".", new_dir_inode_num, INODE_TYPE_DIRECTORY, &dot);
+    if (res != SUCCESS) {
+        status = res;
         goto cleanup_remove_parent_dentry;
     }
 
     uint32_t dot_blocks = 0;
-    if (dentry_add(fs->disk, new_dir_inode_num, &dot, fs->block_bitmap, &dot_blocks) != SUCCESS) {
-        status = ERROR_IO;
+    res = dentry_add(fs->disk, new_dir_inode_num, &dot, fs->block_bitmap, &dot_blocks);
+    if (res != SUCCESS) {
+        status = res;
         goto cleanup_remove_parent_dentry;
     }
     fs->sb.free_blocks -= dot_blocks;
 
-    if (dentry_create("..", parent_inode_num, INODE_TYPE_DIRECTORY, &dotdot) != SUCCESS) {
-        status = ERROR_INVALID;
+    res = dentry_create("..", parent_inode_num, INODE_TYPE_DIRECTORY, &dotdot);
+    if (res != SUCCESS) {
+        status = res;
         goto cleanup_remove_parent_dentry;
     }
 
     uint32_t dotdot_blocks = 0;
-    if (dentry_add(fs->disk, new_dir_inode_num, &dotdot, fs->block_bitmap, &dotdot_blocks) != SUCCESS) {
-        status = ERROR_IO;
+    res = dentry_add(fs->disk, new_dir_inode_num, &dotdot, fs->block_bitmap, &dotdot_blocks);
+    if (res != SUCCESS) {
+        status = res;
         goto cleanup_remove_parent_dentry;
     }
     fs->sb.free_blocks -= dotdot_blocks;
@@ -148,8 +163,9 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
     }
 
     // update superblock
-    if (superblock_write(fs->disk, &fs->sb) != SUCCESS) {
-        status = ERROR_IO;
+    res = superblock_write(fs->disk, &fs->sb);
+    if (res != SUCCESS) {
+        status = res;
         goto cleanup_revert_parent_link;
     }
     save_bitmaps(fs);
@@ -245,12 +261,20 @@ int fs_rmdir(filesystem_t* fs, const char* path) {
     res = fs_path_to_inode(fs, parent_path, &parent_inode_num);
     if (res != SUCCESS) return res;
 
+    // check write permission on parent directory
+    struct inode parent_inode;
+    if (inode_read(fs->disk, parent_inode_num, &parent_inode) != SUCCESS) {
+        return ERROR_IO;
+    }
+    if (!perm_can_write(&parent_inode)) {
+        return ERROR_PERMISSION;
+    }
+
     // remove from parent directory
     res = dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, parent_inode_num, dirname);
     if (res != SUCCESS) return res;
 
     // decrement parent link count
-    struct inode parent_inode;
     if (inode_read(fs->disk, parent_inode_num, &parent_inode) != SUCCESS) {
         return ERROR_IO;
     }
@@ -264,10 +288,9 @@ int fs_rmdir(filesystem_t* fs, const char* path) {
 
     // free target directory inode and its blocks
     uint32_t freed_blocks = 0;
-    if (inode_free(fs->disk, fs->inode_bitmap, fs->block_bitmap,
-                   target_inode_num, &freed_blocks) != SUCCESS) {
-        return ERROR_IO;
-    }
+    res = inode_free(fs->disk, fs->inode_bitmap, fs->block_bitmap,
+                   target_inode_num, &freed_blocks);
+    if (res != SUCCESS) return res;
 
     fs->sb.free_inodes++;
     fs->sb.free_blocks += freed_blocks;
@@ -276,9 +299,8 @@ int fs_rmdir(filesystem_t* fs, const char* path) {
         return ERROR_IO;
     }
 
-    if (superblock_write(fs->disk, &fs->sb) != SUCCESS) {
-        return ERROR_IO;
-    }
+    res = superblock_write(fs->disk, &fs->sb);
+    if (res != SUCCESS) return res;
 
     return SUCCESS;
 }
@@ -305,6 +327,13 @@ int fs_cd(filesystem_t* fs, const char* path) {
 
     if (inode.type != INODE_TYPE_DIRECTORY) {
         return ERROR_INVALID;
+    }
+    printf("[DEBUG fs_cd] inode_num=%u permissions=0%o type=%u\n",
+       inode_num, inode.permissions, inode.type);
+
+    // check execute permission to enter directory
+    if (!perm_can_execute(&inode)) {
+        return ERROR_PERMISSION;
     }
 
     // update current directory
@@ -336,6 +365,11 @@ int fs_list(filesystem_t* fs, const char* path, struct dentry** out_entries, uin
     // must be directory
     if (inode.type != INODE_TYPE_DIRECTORY) {
         return ERROR_INVALID;
+    }
+
+    // check read permission to list directory contents
+    if (!perm_can_read(&inode)) {
+        return ERROR_PERMISSION;
     }
 
     return dentry_list(fs->disk, inode_num, out_entries, out_count);

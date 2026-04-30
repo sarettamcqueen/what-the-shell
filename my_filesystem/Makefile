@@ -38,14 +38,16 @@ FS_SRCS = $(SRCDIR)/filesystem/fs_mount.c \
           $(SRCDIR)/filesystem/fs_dir.c \
           $(SRCDIR)/filesystem/fs_file.c \
           $(SRCDIR)/filesystem/fs_path.c \
-          $(SRCDIR)/filesystem/fs_stat.c
+          $(SRCDIR)/filesystem/fs_stat.c \
+		  $(SRCDIR)/filesystem/permissions.c
 
 FS_OBJS = $(BUILDDIR)/fs_mount.o \
           $(BUILDDIR)/fs_io.o \
           $(BUILDDIR)/fs_dir.o \
           $(BUILDDIR)/fs_file.o \
           $(BUILDDIR)/fs_path.o \
-          $(BUILDDIR)/fs_stat.o
+          $(BUILDDIR)/fs_stat.o \
+		  $(BUILDDIR)/permissions.o
 
 # === VFS MODULE ===
 VFS_SRCS = $(SRCDIR)/vfs/vfs_mount.c \
@@ -131,7 +133,7 @@ $(DENTRY_OBJ): $(DENTRY_SRC) $(SRCDIR)/filesystem/dentry.h $(SRCDIR)/filesystem/
 
 # FS Objects
 FS_INCLUDES = -I$(SRCDIR)/filesystem -I$(SRCDIR)/utils -I$(SRCDIR)/disk
-FS_HEADERS = $(SRCDIR)/filesystem/fs.h $(SRCDIR)/filesystem/fs_internal.h $(COMMON_HEADERS)
+FS_HEADERS = $(SRCDIR)/filesystem/fs.h $(SRCDIR)/filesystem/fs_internal.h $(SRCDIR)/filesystem/permissions.h $(COMMON_HEADERS)
 
 $(BUILDDIR)/fs_mount.o: $(SRCDIR)/filesystem/fs_mount.c $(FS_HEADERS)
 	@echo "Compiling fs_mount..."
@@ -155,6 +157,10 @@ $(BUILDDIR)/fs_path.o: $(SRCDIR)/filesystem/fs_path.c $(FS_HEADERS)
 
 $(BUILDDIR)/fs_stat.o: $(SRCDIR)/filesystem/fs_stat.c $(FS_HEADERS)
 	@echo "Compiling fs_stat..."
+	@$(CC) $(CFLAGS) $(FS_INCLUDES) -c $< -o $@
+
+$(BUILDDIR)/permissions.o: $(SRCDIR)/filesystem/permissions.c $(FS_HEADERS)
+	@echo "Compiling permissions module..."
 	@$(CC) $(CFLAGS) $(FS_INCLUDES) -c $< -o $@
 
 # VFS Objects
