@@ -226,3 +226,15 @@ int vfs_mv(vfs_t* vfs, const char* src_path, const char* dst_path) {
         return SUCCESS;
     }
 }
+
+int vfs_chmod(vfs_t* vfs, const char* path, uint16_t permissions) {
+    if (!vfs || !path) return ERROR_INVALID;
+
+    filesystem_t* target_fs = NULL;
+    char local_path[MAX_PATH];
+
+    int res = vfs_resolve_path(vfs, path, &target_fs, local_path, sizeof(local_path), NULL, 0);
+    if (res != SUCCESS) return res;
+
+    return fs_chmod(target_fs, local_path, permissions);
+}

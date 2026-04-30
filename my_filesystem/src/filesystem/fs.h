@@ -210,6 +210,15 @@ int fs_rmdir(filesystem_t* fs, const char* path);
  */
 int fs_link(filesystem_t* fs, const char* existing_path, const char* new_path);
 
+/**
+ * Changes the permission bits of a file or directory.
+ * Writes changes to disk.
+ *
+ * @param fs The filesystem
+ * @param local_path Path to the target file or directory
+ * @param permissions New permission bits in octal format (e.g. 0755, 0644)
+ * @return SUCCESS or error code
+ */
 int fs_chmod(filesystem_t* fs, const char* local_path, uint16_t permissions);
 
 // === DIRECTORY LISTING ===

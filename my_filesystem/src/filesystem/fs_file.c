@@ -391,3 +391,20 @@ int fs_rename(filesystem_t* fs, const char* old_path, const char* new_path) {
     save_bitmaps(fs);
     return superblock_write(fs->disk, &fs->sb);
 }
+
+int fs_chmod(filesystem_t* fs, const char* local_path, uint16_t permissions) {
+    if (!fs || !local_path) return ERROR_INVALID;
+
+    uint32_t inode_num;
+    int res = fs_path_to_inode(fs, local_path, &inode_num);
+    if (res != SUCCESS) return res;
+
+    // read inode from disk
+    struct inode target_inode;
+    res = inode_read(fs->disk, inode_num, &target_inode);
+    if (res != SUCCESS) return res;
+
+    // update permissions
+    target_inode.permissions = permissions & 0777;
+    return inode_write(fs->disk, inode_num, &target_inode);
+}

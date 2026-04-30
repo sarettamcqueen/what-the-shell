@@ -105,6 +105,12 @@ int cmd_cp(vfs_t* vfs, int argc, char** argv);
  */
 int cmd_mv(vfs_t* vfs, int argc, char** argv);
 
+/**
+ * @brief Changes the permissions of a file or directory.
+ * Usage: chmod <octal_mode> <path>
+ */
+int cmd_chmod(vfs_t* vfs, int argc, char** argv);
+
 
 // ==========================================
 // LISTING & LINKS

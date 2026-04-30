@@ -189,7 +189,7 @@ int cmd_cat(vfs_t* vfs, int argc, char** argv) {
     open_file_t* f;
     int ret = vfs_open(vfs, argv[1], FS_O_RDONLY, &f);
     if (ret != SUCCESS) {
-        printf("cat: cannot open %s\n", argv[1]);
+        print_fs_error("cat", ret, argv[1]);
         return ret;
     }
 
@@ -224,7 +224,7 @@ int cmd_write(vfs_t* vfs, int argc, char** argv) {
     open_file_t* f;
     int ret = vfs_open(vfs, argv[1], FS_O_WRONLY | FS_O_TRUNC | FS_O_CREAT, &f);
     if (ret != SUCCESS) {
-        printf("write: cannot open %s\n", argv[1]);
+        print_fs_error("write", ret, argv[1]);
         return ret;
     }
 
@@ -247,7 +247,7 @@ int cmd_append(vfs_t* vfs, int argc, char** argv) {
     open_file_t* f;
     int ret = vfs_open(vfs, argv[1], FS_O_WRONLY | FS_O_APPEND | FS_O_CREAT, &f);
     if (ret != SUCCESS) {
-        printf("append: cannot open %s\n", argv[1]);
+        print_fs_error("append", ret, argv[1]);
         return ret;
     }
 
@@ -297,6 +297,33 @@ int cmd_ln(vfs_t* vfs, int argc, char** argv) {
     return ret;
 }
 
+int cmd_chmod(vfs_t* vfs, int argc, char** argv) {
+    if (argc != 3) {
+        printf("Usage: chmod <octal_mode> <path>\n");
+        return ERROR_INVALID;
+    }
+
+    const char* mode_str = argv[1];
+    const char* target_path = argv[2];
+
+    // converts string to a base 8 number
+    char* endptr;
+    long mode = strtol(mode_str, &endptr, 8);
+
+    // string validation: check permissions don't exceed max possible value (0777)
+    if (*endptr != '\0' || mode < 0 || mode > 0777) {
+        printf("chmod: invalid mode: '%s'\n", mode_str);
+        return ERROR_INVALID;
+    }
+
+    int ret = vfs_chmod(vfs, target_path, (uint16_t)mode);
+    if (ret != SUCCESS) {
+        print_fs_error("chmod", ret, target_path);
+    }
+
+    return ret;
+}
+
 int cmd_stat(vfs_t* vfs, int argc, char** argv) {
     if (argc != 2) {
         printf("Usage: stat <path>\n");
@@ -322,7 +349,7 @@ int cmd_stat(vfs_t* vfs, int argc, char** argv) {
     printf("Size          : %u bytes\n", st.size);
     printf("Blocks used   : %u\n", st.blocks_used);
     printf("Links count   : %u\n", st.links_count);
-    printf("Permissions   : %o\n", st.permissions);
+    printf("Permissions   : %03o\n", st.permissions);
 
     printf("Created       : ");
     print_timestamp(st.created_time);

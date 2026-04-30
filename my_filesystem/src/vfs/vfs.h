@@ -179,6 +179,8 @@ int vfs_rm(vfs_t* vfs, const char* path);
  */
 int vfs_link(vfs_t* vfs, const char* existing_path, const char* new_path);
 
+int vfs_chmod(vfs_t* vfs, const char* path, uint16_t permissions);
+
 /**
  * Deep copies a file from a source path to a destination path (supports cross-disk).
  */

@@ -48,13 +48,22 @@ int vfs_cd(vfs_t* vfs, const char* path) {
         strcpy(vfs->cwd, "/");
         return SUCCESS;
     }
-    
+    /*** 
     // check if directory exists on disk
     struct inode dir_inode;
     res = fs_stat(target_fs, local_path, &dir_inode, NULL, NULL, 0);
     if (res != SUCCESS) return res;
     
     if (dir_inode.type != INODE_TYPE_DIRECTORY) return ERROR_INVALID;
+
+    // update the vfs's global cwd field
+    strncpy(vfs->cwd, abs_path, MAX_PATH - 1);
+    vfs->cwd[MAX_PATH - 1] = '\0';
+
+    return SUCCESS;
+    */
+    res = fs_cd(target_fs, local_path);
+    if (res != SUCCESS) return res;
 
     // update the vfs's global cwd field
     strncpy(vfs->cwd, abs_path, MAX_PATH - 1);

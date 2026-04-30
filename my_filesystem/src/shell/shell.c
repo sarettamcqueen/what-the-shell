@@ -152,6 +152,7 @@ static const cmd_entry_t shell_cmds[] = {
     { "ln",      cmd_ln      },
     { "cp",      cmd_cp      },
     { "mv",      cmd_mv      },
+    { "chmod",   cmd_chmod   },
     { "stat",    cmd_stat    },
     { "df",      cmd_df      },
     { NULL, NULL }
