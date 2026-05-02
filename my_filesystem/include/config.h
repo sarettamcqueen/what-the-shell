@@ -21,4 +21,4 @@
 #pragma once
 
 #define BLOCK_SIZE 512
-#define MAX_FILENAME 250  // 250 instead of 256 so that the dentry structure is exactly 256B
+#define MAX_FILENAME 58  // so that the dentry structure is exactly 64 bytes
