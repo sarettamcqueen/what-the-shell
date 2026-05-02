@@ -121,7 +121,7 @@ int fs_format(disk_t disk, size_t total_blocks, size_t total_inodes) {
     // create temporary filesystem to manage bitmaps in-memory
     filesystem_t temp_fs;
     temp_fs.disk = disk;
-    temp_fs.sb   = sb;
+    temp_fs.sb = sb;
     temp_fs.block_bitmap = NULL;
     temp_fs.inode_bitmap = NULL;
 
@@ -210,12 +210,12 @@ int fs_format(disk_t disk, size_t total_blocks, size_t total_inodes) {
     if (res != SUCCESS) { status = res; goto cleanup_inode; }
 
     // success: cleanup memory and return
-    printf("Filesystem formatted successfully.\n");
-    printf("Root inode %u created and initialized with '.' and '..'\n", root_inode_num);
+    DEBUG_PRINT("fs_format: Filesystem formatted successfully.\n");
+    DEBUG_PRINT("fs_format: Root inode %u created and initialized with '.' and '..'\n", root_inode_num);
     goto cleanup_bitmaps;
 
 cleanup_inode:
-    printf("[CLEANUP] cleanup_inode triggered\n");
+    DEBUG_PRINT("fs_format: cleanup_inode triggered. Freeing inode %u and allocated blocks.\n", root_inode_num);
     {
         uint32_t freed_blocks = 0;
         inode_free(disk, temp_fs.inode_bitmap, temp_fs.block_bitmap,
@@ -226,8 +226,14 @@ cleanup_inode:
     }
 
 cleanup_bitmaps:
-    if (temp_fs.block_bitmap) bitmap_destroy(&temp_fs.block_bitmap);
-    if (temp_fs.inode_bitmap) bitmap_destroy(&temp_fs.inode_bitmap);
+    if (temp_fs.block_bitmap) {
+        DEBUG_PRINT("fs_format: destroying temporary block_bitmap\n");
+        bitmap_destroy(&temp_fs.block_bitmap);
+    }
+    if (temp_fs.inode_bitmap) {
+        DEBUG_PRINT("fs_format: destroying temporary inode_bitmap\n");
+        bitmap_destroy(&temp_fs.inode_bitmap);
+    }
 
     return status;
 }
@@ -275,14 +281,18 @@ int fs_mount(disk_t disk, filesystem_t** out_fs) {
     
     // release memory if mount fails
     if (superblock_write(disk, &fs->sb) != SUCCESS) {
+        DEBUG_PRINT("fs_mount: superblock write failed. Starting mount rollback...\n");
+        
         bitmap_destroy(&fs->block_bitmap);
         bitmap_destroy(&fs->inode_bitmap);
         free(fs);
+        
+        DEBUG_PRINT("fs_mount: rollback complete. Memory restored.\n");
         return ERROR_IO;
     }
 
     *out_fs = fs;
-    printf("Filesystem mounted successfully.\n");
+    DEBUG_PRINT("Filesystem mounted successfully.\n");
     superblock_print(&fs->sb);
 
     return SUCCESS;
@@ -321,9 +331,9 @@ cleanup:
     free(fs);
 
     if (status == SUCCESS) {
-        printf("Filesystem unmounted successfully.\n");
+        DEBUG_PRINT("Filesystem unmounted successfully.\n");
     } else {
-        printf("Filesystem unmount failed (error %d).\n", status);
+        DEBUG_PRINT("Filesystem unmount failed (error %d).\n", status);
     }
 
     return status;

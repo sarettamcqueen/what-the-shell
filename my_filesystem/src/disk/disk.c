@@ -1,4 +1,5 @@
 #include "disk.h"
+#include "common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,7 +16,7 @@ struct disk_emulator {
     void* mapped_memory;             // pointer to mapped memory
     size_t size;                     // total size in bytes
     int block_count;                 // number of blocks
-    int block_size;                  // size of a block (512)
+    int block_size;                  // size of a block
     bool attached;                   // true if disk is attached
     char filename[MAX_FILENAME];     // filename on disk
 };
@@ -97,7 +98,7 @@ int disk_attach(const char* filename, size_t size, bool create_new, disk_t* disk
     d->block_count = d->size / BLOCK_SIZE;
     d->attached = true;
 
-    printf("Disk attached: %s (Size: %zu bytes, Blocks: %d)\n",
+    DEBUG_PRINT("Disk attached: %s (Size: %zu bytes, Blocks: %d)\n",
            filename, d->size, d->block_count);
 
     *disk = d;
@@ -124,7 +125,7 @@ int disk_detach(disk_t disk) {
         close(disk->fd);
     }
 
-    printf("Disk detached: %s\n", disk->filename);
+    DEBUG_PRINT("Disk detached: %s\n", disk->filename);
 
     // reset structure
     memset(disk, 0, sizeof(struct disk_emulator));
@@ -149,6 +150,7 @@ int disk_read_block(disk_t disk, int block_num, void* buffer) {
     }
 
     off_t offset = block_to_offset(block_num);
+    // DEBUG_PRINT("disk_read_block: Reading block %d (offset %ld)\n", block_num, (long)offset);
     
     // copy from mapped memory to buffer
     memcpy(buffer, (char*)disk->mapped_memory + offset, BLOCK_SIZE);
@@ -170,6 +172,7 @@ int disk_write_block(disk_t disk, int block_num, const void* buffer) {
     }
 
     off_t offset = block_to_offset(block_num);
+    // DEBUG_PRINT("disk_write_block: writing block %d (offset %ld)\n", block_num, (long)offset);
     
     // copy from buffer to mapped memory
     memcpy((char*)disk->mapped_memory + offset, buffer, BLOCK_SIZE);
@@ -262,7 +265,7 @@ int disk_sync(disk_t disk) {
 
 void disk_print_info(disk_t disk) {
     if (!disk_is_attached(disk)) {
-        printf("Disk not attached\n");
+        DEBUG_PRINT("Disk not attached\n");
         return;
     }
 

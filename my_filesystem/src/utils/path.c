@@ -26,6 +26,7 @@ struct path_components* path_parse(const char* path) {
     // count components (non-empty tokens between separators)
     char temp_count[MAX_PATH];
     strncpy(temp_count, temp, MAX_PATH - 1);
+    temp_count[MAX_PATH - 1] = '\0';
     
     char* token = strtok(temp_count, "/");
     int count = 0;
@@ -212,7 +213,7 @@ bool filename_is_valid(const char* filename) {
         return false;
 
     // set of banned characters
-    const char* forbidden = "<>:\"'|?*";
+    const char* forbidden = "<>:\"'|?* "; // SPACE is also disallowed!!
 
     for (size_t i = 0; i < len; i++) {
         unsigned char c = filename[i];

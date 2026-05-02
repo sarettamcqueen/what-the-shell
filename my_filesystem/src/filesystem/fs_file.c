@@ -8,7 +8,7 @@
 
 int fs_create(filesystem_t* fs, const char* path, uint16_t permissions) {
 
-    printf("[DEBUG fs_create] path=%s\n", path);
+    DEBUG_PRINT("fs_create: path=%s\n", path);
 
     int status = SUCCESS;
     char parent_path[MAX_PATH];

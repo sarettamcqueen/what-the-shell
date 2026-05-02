@@ -328,8 +328,7 @@ int fs_cd(filesystem_t* fs, const char* path) {
     if (inode.type != INODE_TYPE_DIRECTORY) {
         return ERROR_INVALID;
     }
-    printf("[DEBUG fs_cd] inode_num=%u permissions=0%o type=%u\n",
-       inode_num, inode.permissions, inode.type);
+    DEBUG_PRINT("fs_cd: inode_num=%u permissions=0%o type=%u\n", inode_num, inode.permissions, inode.type);
 
     // check execute permission to enter directory
     if (!perm_can_execute(&inode)) {
