@@ -1,12 +1,14 @@
 # what-the-shell — Custom Filesystem with VFS Layer and memory mapping
 
-A from-scratch implementation in C of a Unix-like filesystem with inode-based
-storage, persistent disk images, multi-mount support via a Virtual File System
-(VFS) layer, and an interactive shell for manual exploration.
+A from-scratch implementation in C of a Unix-like filesystem built on top of
+memory-mapped disk images. The on-disk format is inspired by ext2. A
+Virtual File System (VFS) layer sits above the filesystem to provide
+transparent multi-mount support, unified path resolution, and cross-disk
+operations, all accessible through an interactive shell.
 
-Built as a university thesis project to demonstrate how operating systems
-implement the VFS abstraction that allows multiple heterogeneous filesystems
-to coexist under a single, unified namespace.
+Built as a university thesis project to explore how operating systems
+implement block-level storage, memory-mapped I/O, and the VFS abstraction
+from the ground up.
 
 ---
 
