@@ -40,6 +40,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdbool.h>
 #include <time.h>
 #include <fcntl.h>
@@ -48,16 +49,22 @@
 // === SIZES AND COUNTS ===
 #define INODE_SIZE         128                               
 #define INODES_PER_BLOCK   (BLOCK_SIZE / INODE_SIZE)
-#define DENTRY_SIZE        256
+#define DENTRY_SIZE        64
 #define DENTRIES_PER_BLOCK (BLOCK_SIZE / DENTRY_SIZE)                              
 #define MAX_PATH           1024
 #define MAGIC_NUMBER       0x12345678
-#define BYTES_PER_INODE    4096  // 1 inode every 4KB of disk space
+#define BYTES_PER_INODE    8192  // 1 inode every 8KB of disk space
 #define MIN_INODES         64    // for very small disks
 /*
- * NOTE: MIN_INODES set to 64 means that the disk size must be at least 10240 bytes (= 20 blocks)
- * since the inode table requires 16 blocks, and the superblock, the block bitmap, the inode bitmap, and the root inode
- * each require 1 block. This filesystem does not work on disks smaller than 10 KiB!!!
+ * NOTE: MIN_INODES set to 64 establishes an absolute minimum overhead of 20 blocks:
+ * - Superblock: 1 block
+ * - Block Bitmap: 1 block
+ * - Inode Bitmap: 1 block
+ * - Inode Table: 16 blocks (64 inodes * 128 bytes = 8192 bytes)
+ * - Root Directory: 1 block (First data block)
+ * * Total = 20 blocks * 512 bytes = 10,240 bytes (10 KiB).
+ * Disks smaller than 10 KiB cannot be formatted. Disks exactly 10 KiB will format
+ * successfully but will have 0 free data blocks.
  */
 
 // === RESERVED INODES ===
@@ -135,7 +142,7 @@ struct inode {
     uint32_t reserved[9];       // more padding
 } __attribute__((packed));
 
-// Directory entry (256B per entry --> 1 block contains exactly 2 dentries)
+// Directory entry (64B per entry --> 1 block contains exactly 8 dentries)
 /*  
     NOTE: in real filesystems, directory entries do not have a fixed length. 
     A rec_len field is used to see after how many bytes the next entry starts. 
@@ -159,9 +166,16 @@ _Static_assert(sizeof(struct dentry) == DENTRY_SIZE,
 _Static_assert((BLOCK_SIZE % DENTRY_SIZE) == 0, 
                "BLOCK_SIZE must be divisible by DENTRY_SIZE");
 
+// === DEBUG PRINTS ===
+#ifdef DEBUG_MODE
+    #define DEBUG_PRINT(fmt, ...) printf("[DEBUG] " fmt, ##__VA_ARGS__)
+#else
+    #define DEBUG_PRINT(fmt, ...) do {} while (0)
+#endif
+
 // === USEFUL MACROS ===
-#define ALIGN_TO_BLOCK(size) (((size) + BLOCK_SIZE - 1) & ~(BLOCK_SIZE - 1))    // rounds size up to the next multiple of 512
-#define BLOCKS_NEEDED(size) (ALIGN_TO_BLOCK(size) / BLOCK_SIZE)                 // calculates how many 512‑byte blocks are needed to contain size bytes
+#define ALIGN_TO_BLOCK(size) (((size) + BLOCK_SIZE - 1) & ~(BLOCK_SIZE - 1))    // rounds "size" up to the next multiple of BLOCK_SIZE
+#define BLOCKS_NEEDED(size) (ALIGN_TO_BLOCK(size) / BLOCK_SIZE)                 // calculates how many blocks are needed to contain "size" bytes
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
