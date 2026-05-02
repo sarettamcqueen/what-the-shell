@@ -46,7 +46,7 @@ void shell_run(void) {
     vfs_init(&my_vfs);
 
     if (isatty(STDIN_FILENO)) {
-        printf("\nWhatTheShell v2.0\n");
+        printf("\nWhatTheShell\n");
         printf("Type 'help' to get available commands.\n");
         printf("Type 'exit' to quit.\n");
         printf("\n");
@@ -123,8 +123,9 @@ static int handle_help(vfs_t* vfs, int argc, char** argv) {
     printf("  ln <src> <dst>\n");
     printf("  cp <src> <dst>\n");
     printf("  mv <src> <dst>\n");
+    printf("  chmod <mode> <path>\n");
     printf("  stat <path>\n");
-    printf("  fsinfo\n");
+    printf("  df\n");
     printf("  cat <file>\n");
     printf("  help\n");
     printf("  exit\n");
