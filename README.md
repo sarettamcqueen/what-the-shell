@@ -1,7 +1,7 @@
-# what-the-shell — Custom Filesystem with VFS Layer and memory mapping
+# what-the-shell — Custom filesystem with VFS layer and memory mapping
 
-A from-scratch implementation in C of a Unix-like filesystem built on top of
-memory-mapped disk images. The on-disk format is inspired by ext2. A
+A from-scratch implementation in C of a Unix-like filesystem built on top of a
+memory-mapped disk image. The on-disk format is inspired by ext2. A
 Virtual File System (VFS) layer sits above the filesystem to provide
 transparent multi-mount support, unified path resolution, and cross-disk
 operations, all accessible through an interactive shell.
@@ -39,19 +39,19 @@ and is entirely agnostic of filesystem semantics.
 
 Implements the on-disk format and all filesystem logic:
 
-- **Superblock** — stored at block 0, holds geometry metadata (total blocks,
-  total inodes, free counts, timestamps, magic number `0x12345678`). Layout is
-  verified at compile time with `_Static_assert`.
-- **Bitmaps** — one bitmap for blocks, one for inodes. Loaded into memory on
+- **Superblock**: stores the metadata needed to mount and validate the filesystem: total and free block/inode counts, block size,
+  timestamps, and the starting position and size of each metadata region (block bitmap, inode bitmap, inode table, and data area).
+  Layout is verified at compile time with `_Static_assert`.
+- **Bitmaps**: used to track free blocks/inodes. Loaded into memory on
   mount and flushed to disk on every write operation and on unmount.
-- **Inode table** — fixed-size 128-byte inodes containing file type, size,
+- **Inode table**: fixed-size 128-byte inodes containing file type, size,
   link count, permission bits, three timestamps, 12 direct block pointers, and
   one singly-indirect block pointer. Inode 0 is reserved as invalid; inode 1
   is the root directory.
-- **Dentries** — fixed-size 64-byte directory entries containing the entry
+- **Dentries**: fixed-size 64-byte directory entries containing the entry
   name, inode number, and file type. Each directory always contains `.` and
   `..` entries.
-- **Permission enforcement** — the 9-bit Unix `rwxrwxrwx` field is stored in
+- **Permission enforcement**: the 9-bit Unix `rwxrwxrwx` field is stored in
   every inode. Since the filesystem has no concept of users or groups, the
   owner bits (`rwx------`) are used for all access checks. Permissions are
   enforced at `open`, directory traversal, `ls`, `cd`, `mkdir`, `touch`, `rm`,
@@ -64,11 +64,11 @@ The minimum disk size is 10 KiB (enforced at format time).
 Maintains a mount table of up to 8 simultaneously mounted filesystem instances
 and presents them as a single unified namespace:
 
-- **Path resolution** — `vfs_resolve_path` performs longest-prefix matching on
+- **Path resolution**: `vfs_resolve_path` performs longest-prefix matching on
   mount paths to dispatch each operation to the correct underlying filesystem.
-- **Unified CWD** — a single absolute path string tracks the current working
+- **Unified CWD**: a single absolute path string tracks the current working
   directory across all mounted filesystems transparently.
-- **Cross-disk operations** — `vfs_cp` always performs a full read/write copy, transfering data block by block, 
+- **Cross-disk operations**: `vfs_cp` always performs a full read/write copy, transfering data block by block, 
   regardless of whether source and destination reside on the same filesystem
   or not. `vfs_mv` instead distinguishes between the two cases: if source and destination are on the
   same filesystem it only updates the dentry (rename);
@@ -83,7 +83,7 @@ and has no knowledge of the underlying filesystem implementation.
 
 ---
 
-## On-Disk Format
+## On-Disk format
 
 ```
 Block 0          : superblock
@@ -130,7 +130,7 @@ format <image> <size_bytes>   # initialize a new disk image
 mount  <image> <mountpoint>   # mount it (first mount must be on /)
 ```
 
-### Available Commands
+### Available commands
 
 | Command | Description |
 |---|---|
@@ -154,7 +154,7 @@ mount  <image> <mountpoint>   # mount it (first mount must be on /)
 | `stat <path>` | Display inode metadata |
 | `df` | Show free space for all mounted filesystems |
 
-### Single-Disk Session
+### Single-disk session
 
 ```
 format disk.img 1024000
@@ -174,7 +174,7 @@ geometry can be inspected directly:
 xxd disk.img | head -1
 ```
 
-### Multi-Mount Session
+### Multi-mount session
 
 ```
 format root.img 2048000
@@ -186,12 +186,12 @@ mount usb.img /mnt/usb
 touch /home/file.txt
 write /home/file.txt "data"
 cp /home/file.txt /mnt/usb/backup.txt   # cross-disk copy
-df                                       # statistics for both filesystems
+df                                      # statistics for both filesystems
 unmount /mnt/usb
 exit
 ```
 
-### Permission Examples
+### Permission examples
 
 ```
 touch /secret.txt
@@ -211,20 +211,20 @@ cd /dir                     # Permission denied
 
 ---
 
-## Known Limitations
+## Known limitations
 
-- **Fixed-size dentries** — directory entries are 64 bytes regardless of name
+- **Fixed-size dentries**: directory entries are 64 bytes regardless of name
   length, which wastes space compared to the variable-length dentries used by
   ext2 and later filesystems.
-- **No journaling** — an unclean shutdown may leave the filesystem in an
+- **No journaling**: an unclean shutdown may leave the filesystem in an
   inconsistent state. There is no recovery mechanism.
-- **No concurrency** — the filesystem is designed for single-threaded access
+- **No concurrency**: the filesystem is designed for single-threaded access
   only. No locking of any kind is implemented.
-- **Single indirect block** — files are limited to 12 + 128 = 140 blocks
+- **Single indirect block**: files are limited to 12 + 128 = 140 blocks
   (71 680 bytes with 512-byte blocks). Double and triple indirection are not
   implemented.
-- **No users or groups** — the owner permission bits (`rwx------`) are applied
+- **No users or groups**: the owner permission bits (`rwx------`) are applied
   uniformly to all callers. The group and other bits are stored but not enforced.
-- **Single filesystem type** — the VFS supports up to 8 simultaneous mounts,
+- **Single filesystem type**: the VFS supports up to 8 simultaneous mounts,
   but all must be instances of the same custom filesystem. Support for
   heterogeneous filesystem types is a natural next step but is not implemented.
