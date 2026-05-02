@@ -339,7 +339,7 @@ int cmd_stat(vfs_t* vfs, int argc, char** argv) {
         print_fs_error("stat", ret, argv[1]);
         return ret;
     }
-    printf("[DEBUG cmd_stat] argv[1]='%s' inode_num=%u\n", argv[1], inode_num);
+    DEBUG_PRINT("cmd_stat: argv[1]='%s' inode_num=%u\n", argv[1], inode_num);
 
     // print inode info
     printf("\n=== STAT ===\n");
@@ -376,10 +376,13 @@ int cmd_stat(vfs_t* vfs, int argc, char** argv) {
     return SUCCESS;
 }
 
-// df (was fsinfo)
 int cmd_df(vfs_t* vfs, int argc, char** argv) {
     (void)argc;
     (void)argv;
+    if (argc != 1) {
+        printf("Usage: df\n");
+        return ERROR_INVALID;
+    }
     vfs_df(vfs);
     return SUCCESS;
 }
