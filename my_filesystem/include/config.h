@@ -20,5 +20,14 @@
 
 #pragma once
 
+#include <stdio.h>
+
 #define BLOCK_SIZE 512
 #define MAX_FILENAME 58  // so that the dentry structure is exactly 64 bytes
+
+// === DEBUG PRINTS ===
+#ifdef DEBUG_MODE
+    #define DEBUG_PRINT(fmt, ...) printf("[DEBUG] " fmt, ##__VA_ARGS__)
+#else
+    #define DEBUG_PRINT(fmt, ...) do {} while (0)
+#endif

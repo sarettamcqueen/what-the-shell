@@ -166,13 +166,6 @@ _Static_assert(sizeof(struct dentry) == DENTRY_SIZE,
 _Static_assert((BLOCK_SIZE % DENTRY_SIZE) == 0, 
                "BLOCK_SIZE must be divisible by DENTRY_SIZE");
 
-// === DEBUG PRINTS ===
-#ifdef DEBUG_MODE
-    #define DEBUG_PRINT(fmt, ...) printf("[DEBUG] " fmt, ##__VA_ARGS__)
-#else
-    #define DEBUG_PRINT(fmt, ...) do {} while (0)
-#endif
-
 // === USEFUL MACROS ===
 #define ALIGN_TO_BLOCK(size) (((size) + BLOCK_SIZE - 1) & ~(BLOCK_SIZE - 1))    // rounds "size" up to the next multiple of BLOCK_SIZE
 #define BLOCKS_NEEDED(size) (ALIGN_TO_BLOCK(size) / BLOCK_SIZE)                 // calculates how many blocks are needed to contain "size" bytes
