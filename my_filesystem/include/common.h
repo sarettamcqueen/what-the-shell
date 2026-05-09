@@ -175,3 +175,4 @@ _Static_assert((BLOCK_SIZE % DENTRY_SIZE) == 0,
 // === USEFUL FUNCTION PROTOTYPES ===
 const char* error_string(int error_code);
 void print_timestamp(time_t timestamp);
+int map_disk_error(int disk_error); // maps disk-level error codes to filesystem-level error codes

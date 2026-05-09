@@ -1,7 +1,27 @@
 #include "common.h"
+#include "disk.h"
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+
+int map_disk_error(int disk_error) {
+    switch (disk_error) {
+        case DISK_SUCCESS:
+            return SUCCESS;
+        case DISK_ERROR_NOT_FOUND:
+            return ERROR_NOT_FOUND;
+        case DISK_ERROR_INVALID_BLOCK:
+            return ERROR_INVALID;
+        case DISK_ERROR_IO:
+            return ERROR_IO;
+        case DISK_ERROR_NO_SPACE:
+            return ERROR_NO_SPACE;
+        case DISK_ERROR_NOT_ATTACHED:
+            return ERROR_IO;
+        default:
+            return ERROR_GENERIC;
+    }
+}
 
 const char* error_string(int error_code) {
     switch (error_code) {
