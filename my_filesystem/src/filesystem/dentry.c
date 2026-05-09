@@ -14,8 +14,9 @@ static int scan_dentry_block(disk_t disk, uint32_t block_num, const char* name,
         return ERROR_NOT_FOUND;
 
     char buffer[BLOCK_SIZE];
-    if (disk_read_block(disk, block_num, buffer) != DISK_SUCCESS)
-        return ERROR_IO;
+
+    int ret = disk_read_block(disk, block_num, buffer);
+    if (ret != DISK_SUCCESS) return map_disk_error(ret);
 
     struct dentry* entries = (struct dentry*)buffer;
     for (uint32_t j = 0; j < DENTRIES_PER_BLOCK; j++) {
@@ -37,8 +38,8 @@ static int remove_dentry_from_block(disk_t disk, uint32_t block_num,
         return ERROR_INVALID;
     
     char buffer[BLOCK_SIZE];
-    if (disk_read_block(disk, block_num, buffer) != DISK_SUCCESS)
-        return ERROR_IO;
+    int ret = disk_read_block(disk, block_num, buffer);
+    if (ret != DISK_SUCCESS) return map_disk_error(ret);
     
     struct dentry* entries = (struct dentry*)buffer;
     for (uint32_t j = 0; j < DENTRIES_PER_BLOCK; j++) {
@@ -47,8 +48,8 @@ static int remove_dentry_from_block(disk_t disk, uint32_t block_num,
             // found - mark as free
             memset(&entries[j], 0, sizeof(struct dentry));
             
-            if (disk_write_block(disk, block_num, buffer) != DISK_SUCCESS)
-                return ERROR_IO;
+            ret = disk_write_block(disk, block_num, buffer);
+            if (ret != DISK_SUCCESS) return map_disk_error(ret);
             
             return SUCCESS;
         }
@@ -66,8 +67,8 @@ static int count_dentries_in_block(disk_t disk, uint32_t block_num, uint32_t* co
     }
     
     char buffer[BLOCK_SIZE];
-    if (disk_read_block(disk, block_num, buffer) != DISK_SUCCESS)
-        return ERROR_IO;
+    int ret = disk_read_block(disk, block_num, buffer);
+    if (ret != DISK_SUCCESS) return map_disk_error(ret);
     
     struct dentry* entries = (struct dentry*)buffer;
     uint32_t local_count = 0;
@@ -88,8 +89,8 @@ static int fill_dentries_from_block(disk_t disk, uint32_t block_num,
         return SUCCESS;
     
     char buffer[BLOCK_SIZE];
-    if (disk_read_block(disk, block_num, buffer) != DISK_SUCCESS)
-        return ERROR_IO;
+    int ret = disk_read_block(disk, block_num, buffer);
+    if (ret != DISK_SUCCESS) return map_disk_error(ret);
     
     struct dentry* entries = (struct dentry*)buffer;
     
@@ -213,8 +214,8 @@ int dentry_find(disk_t disk, uint32_t dir_inode_num,
     // scan indirect block (if exists)
     if (dir_inode.indirect != 0) {
         char indirect_buffer[BLOCK_SIZE];
-        if (disk_read_block(disk, dir_inode.indirect, indirect_buffer) != DISK_SUCCESS)
-            return ERROR_IO;
+        result = disk_read_block(disk, dir_inode.indirect, indirect_buffer);
+        if (result != DISK_SUCCESS) return map_disk_error(result);
         
         uint32_t* block_ptrs = (uint32_t*)indirect_buffer;
         uint32_t max_ptrs = BLOCK_SIZE / sizeof(uint32_t);  // 128 pointers
@@ -260,6 +261,7 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
     
     // find first free slot (in existing direct blocks or allocate new one)
     char buffer[BLOCK_SIZE];
+    int ret;
     
     for (uint32_t i = 0; i < 12; i++) {
         // if this slot has no block allocated yet
@@ -299,7 +301,8 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
             entries[0] = *new_dentry;
             
             // write block to disk
-            if (disk_write_block(disk, new_block, buffer) != DISK_SUCCESS) {
+            ret = disk_write_block(disk, new_block, buffer);
+            if (ret != DISK_SUCCESS) {
                 // rollback: revert inode changes and free block
                 dir_inode.direct[i] = 0;
                 dir_inode.blocks_used--;
@@ -307,15 +310,15 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
                 bitmap_clear(block_bitmap, new_block);
                 if (out_blocks_allocated)
                     (*out_blocks_allocated)--;
-                return ERROR_IO;
+                return map_disk_error(ret);
             }
             
             return SUCCESS;
         }
         
         // block exists, check for free slot inside it
-        if (disk_read_block(disk, dir_inode.direct[i], buffer) != DISK_SUCCESS)
-            return ERROR_IO;
+        ret = disk_read_block(disk, dir_inode.direct[i], buffer);
+        if (ret != DISK_SUCCESS) return map_disk_error(ret);
         
         struct dentry* entries = (struct dentry*)buffer;
         for (uint32_t j = 0; j < DENTRIES_PER_BLOCK; j++) {
@@ -323,8 +326,8 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
                 // found free slot in existing block
                 entries[j] = *new_dentry;
                 
-                if (disk_write_block(disk, dir_inode.direct[i], buffer) != DISK_SUCCESS)
-                    return ERROR_IO;
+                ret = disk_write_block(disk, dir_inode.direct[i], buffer);
+                if (ret != DISK_SUCCESS) return map_disk_error(ret);
                 
                 // update directory modification time
                 dir_inode.modified_time = time(NULL);
@@ -361,21 +364,22 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
         // initialize indirect block (all zeros = no data blocks allocated)
         char indirect_buffer[BLOCK_SIZE];
         memset(indirect_buffer, 0, BLOCK_SIZE);
-        if (disk_write_block(disk, indirect_block, indirect_buffer) != DISK_SUCCESS) {
+        ret = disk_write_block(disk, indirect_block, indirect_buffer);
+        if (ret != DISK_SUCCESS) {
             dir_inode.indirect = 0;
             dir_inode.blocks_used--;
             inode_write(disk, dir_inode_num, &dir_inode);
             bitmap_clear(block_bitmap, indirect_block);
             if (out_blocks_allocated)
                 (*out_blocks_allocated)--;
-            return ERROR_IO;
+            return map_disk_error(ret);
         }
     }
     
     // read indirect block
     char indirect_buffer[BLOCK_SIZE];
-    if (disk_read_block(disk, dir_inode.indirect, indirect_buffer) != DISK_SUCCESS)
-        return ERROR_IO;
+    ret = disk_read_block(disk, dir_inode.indirect, indirect_buffer);
+    if (ret != DISK_SUCCESS) return map_disk_error(ret);
     
     uint32_t* block_ptrs = (uint32_t*)indirect_buffer;
     uint32_t max_ptrs = BLOCK_SIZE / sizeof(uint32_t);  // 128
@@ -396,11 +400,12 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
             
             // update indirect block
             block_ptrs[i] = new_block;
-            if (disk_write_block(disk, dir_inode.indirect, indirect_buffer) != DISK_SUCCESS) {
+            ret = disk_write_block(disk, dir_inode.indirect, indirect_buffer);
+            if (ret != DISK_SUCCESS) {
                 bitmap_clear(block_bitmap, new_block);
                 if (out_blocks_allocated)
                     (*out_blocks_allocated)--;
-                return ERROR_IO;
+                return map_disk_error(ret);
             }
             
             // update inode
@@ -423,14 +428,15 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
             struct dentry* entries = (struct dentry*)buffer;
             entries[0] = *new_dentry;
             
-            if (disk_write_block(disk, new_block, buffer) != DISK_SUCCESS) {
+            ret = disk_write_block(disk, new_block, buffer);
+            if (ret != DISK_SUCCESS) {
                 // rollback
                 block_ptrs[i] = 0;
                 disk_write_block(disk, dir_inode.indirect, indirect_buffer);
                 bitmap_clear(block_bitmap, new_block);
                 if (out_blocks_allocated)
                     (*out_blocks_allocated)--;
-                return ERROR_IO;
+                return map_disk_error(ret);
             }
             
             return SUCCESS;
@@ -438,16 +444,16 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
         
         // check for free slot in existing indirect data block
         char buffer[BLOCK_SIZE];
-        if (disk_read_block(disk, block_ptrs[i], buffer) != DISK_SUCCESS)
-            return ERROR_IO;
+        ret = disk_read_block(disk, block_ptrs[i], buffer);
+        if (ret != DISK_SUCCESS) return map_disk_error(ret);
         
         struct dentry* entries = (struct dentry*)buffer;
         for (uint32_t j = 0; j < DENTRIES_PER_BLOCK; j++) {
             if (entries[j].inode_num == 0) {
                 entries[j] = *new_dentry;
                 
-                if (disk_write_block(disk, block_ptrs[i], buffer) != DISK_SUCCESS)
-                    return ERROR_IO;
+                ret = disk_write_block(disk, block_ptrs[i], buffer);
+                if (ret != DISK_SUCCESS) return map_disk_error(ret);
                 
                 dir_inode.modified_time = time(NULL);
                 inode_write(disk, dir_inode_num, &dir_inode);
@@ -460,10 +466,13 @@ int dentry_add(disk_t disk, uint32_t dir_inode_num,
     return ERROR_NO_SPACE;
 }
 
-int dentry_remove(disk_t disk, struct bitmap* block_bitmap, struct superblock* sb, 
-                  uint32_t dir_inode_num, const char* name) {
-    if (!disk || !name || !block_bitmap || !sb)
+int dentry_remove(disk_t disk, struct bitmap* block_bitmap, 
+                  uint32_t dir_inode_num, const char* name,
+                  uint32_t* out_blocks_freed) {
+    if (!disk || !name || !block_bitmap)
         return ERROR_INVALID;
+
+    if (out_blocks_freed) *out_blocks_freed = 0;
     
     struct inode dir_inode;
     if (inode_read(disk, dir_inode_num, &dir_inode) != SUCCESS) 
@@ -492,7 +501,7 @@ int dentry_remove(disk_t disk, struct bitmap* block_bitmap, struct superblock* s
             if (count == 0) {
                 // free block in bitmap
                 bitmap_clear(block_bitmap, dir_inode.direct[i]);
-                sb->free_blocks++;
+                if (out_blocks_freed) (*out_blocks_freed)++;
                 dir_inode.direct[i] = 0; // logic hole
                 dir_inode.blocks_used--;
                 dir_inode.size -= BLOCK_SIZE;
@@ -508,7 +517,7 @@ int dentry_remove(disk_t disk, struct bitmap* block_bitmap, struct superblock* s
     if (dir_inode.indirect != 0) {
         char indirect_buffer[BLOCK_SIZE];
         result = disk_read_block(disk, dir_inode.indirect, indirect_buffer);
-        if (result != SUCCESS) return result;
+        if (result != DISK_SUCCESS) return map_disk_error(result);
         
         uint32_t* block_ptrs = (uint32_t*)indirect_buffer;
         uint32_t max_ptrs = BLOCK_SIZE / sizeof(uint32_t);
@@ -528,7 +537,7 @@ int dentry_remove(disk_t disk, struct bitmap* block_bitmap, struct superblock* s
                 if (count == 0) {
                     // free data block pointed by indirect
                     bitmap_clear(block_bitmap, block_ptrs[i]);
-                    sb->free_blocks++;
+                    if (out_blocks_freed) (*out_blocks_freed)++;
                     block_ptrs[i] = 0;
                     dir_inode.blocks_used--;
                     dir_inode.size -= BLOCK_SIZE;
@@ -545,7 +554,7 @@ int dentry_remove(disk_t disk, struct bitmap* block_bitmap, struct superblock* s
                 // deallocate indirect block if it's not pointing to any data block
                 if (indirect_empty) {
                     bitmap_clear(block_bitmap, dir_inode.indirect);
-                    sb->free_blocks++;
+                    if (out_blocks_freed) (*out_blocks_freed)++;
                     dir_inode.indirect = 0;
                     dir_inode.blocks_used--;
                 }
@@ -557,7 +566,7 @@ int dentry_remove(disk_t disk, struct bitmap* block_bitmap, struct superblock* s
                 // if a pointer was removed but indirect still exists, update indirect block on disk
                 if (indirect_block_modified && !indirect_empty) {
                     result = disk_write_block(disk, dir_inode.indirect, indirect_buffer);
-                    if (result != SUCCESS) return result;
+                    if (result != DISK_SUCCESS) return map_disk_error(result);
                 }
 
                 return SUCCESS;
@@ -583,7 +592,8 @@ int dentry_list(disk_t disk, uint32_t dir_inode_num,
     // === COUNT PHASE ===
     uint32_t total_count = 0;
     uint32_t block_count;
-    
+    int ret;
+
     // count in direct blocks
     for (uint32_t i = 0; i < 12; i++) {
         if (dir_inode.direct[i] == 0) continue;
@@ -595,8 +605,8 @@ int dentry_list(disk_t disk, uint32_t dir_inode_num,
     // count in indirect blocks
     if (dir_inode.indirect != 0) {
         char indirect_buffer[BLOCK_SIZE];
-        if (disk_read_block(disk, dir_inode.indirect, indirect_buffer) != DISK_SUCCESS)
-            return ERROR_IO;
+        ret = disk_read_block(disk, dir_inode.indirect, indirect_buffer);
+        if (ret != DISK_SUCCESS) return map_disk_error(ret);
         
         uint32_t* block_ptrs = (uint32_t*)indirect_buffer;
         uint32_t max_ptrs = BLOCK_SIZE / sizeof(uint32_t);
@@ -635,9 +645,10 @@ int dentry_list(disk_t disk, uint32_t dir_inode_num,
     // fill from indirect blocks
     if (dir_inode.indirect != 0) {
         char indirect_buffer[BLOCK_SIZE];
-        if (disk_read_block(disk, dir_inode.indirect, indirect_buffer) != DISK_SUCCESS) {
+        ret = disk_read_block(disk, dir_inode.indirect, indirect_buffer);
+        if (ret != DISK_SUCCESS) {
             free(result);
-            return ERROR_IO;
+            return map_disk_error(ret);
         }
         
         uint32_t* block_ptrs = (uint32_t*)indirect_buffer;
