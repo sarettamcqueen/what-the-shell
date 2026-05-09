@@ -30,6 +30,7 @@ int read_inode_data(filesystem_t* fs, const struct inode* inode,
     uint8_t* buf_ptr = (uint8_t*)buffer;
 
     char block_buffer[BLOCK_SIZE];
+    int ret;
 
     while (remaining > 0) {
         uint32_t block_num = 0;
@@ -45,9 +46,8 @@ int read_inode_data(filesystem_t* fs, const struct inode* inode,
             }
 
             char indirect_buffer[BLOCK_SIZE];
-            if (disk_read_block(fs->disk, inode->indirect, indirect_buffer) != DISK_SUCCESS) {
-                return ERROR_IO;
-            }
+            ret = disk_read_block(fs->disk, inode->indirect, indirect_buffer);
+            if (ret != DISK_SUCCESS) return map_disk_error(ret);
 
             uint32_t* block_ptrs = (uint32_t*)indirect_buffer;
             uint32_t indirect_idx = start_block_idx - 12;
@@ -67,9 +67,8 @@ int read_inode_data(filesystem_t* fs, const struct inode* inode,
             remaining -= chunk;
         } else {
             // read actual block
-            if (disk_read_block(fs->disk, block_num, block_buffer) != DISK_SUCCESS) {
-                return ERROR_IO;
-            }
+            ret = disk_read_block(fs->disk, block_num, block_buffer);
+            if (ret != DISK_SUCCESS) return map_disk_error(ret);
 
             uint32_t chunk = (remaining < BLOCK_SIZE - start_offset) ? remaining : (BLOCK_SIZE - start_offset);
             memcpy(buf_ptr, block_buffer + start_offset, chunk);
@@ -101,6 +100,7 @@ int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inode_num,
     }
 
     *bytes_written = 0;
+    int ret;
 
     uint32_t start_block_idx = offset / BLOCK_SIZE;
     uint32_t start_offset = offset % BLOCK_SIZE;
@@ -154,18 +154,18 @@ int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inode_num,
                 allocated_indirect_block_num = new_block;
 
                 memset(indirect_buffer, 0, BLOCK_SIZE);
-                if (disk_write_block(fs->disk, new_block, indirect_buffer) != DISK_SUCCESS) {
+                ret = disk_write_block(fs->disk, new_block, indirect_buffer);
+                if (ret != DISK_SUCCESS) {
                     bitmap_clear(fs->block_bitmap, new_block);
                     fs->sb.free_blocks++;
                     inode->indirect = 0;
                     inode->blocks_used--;
-                    return ERROR_IO;
+                    return map_disk_error(ret);
                 }
             }
 
-            if (disk_read_block(fs->disk, inode->indirect, indirect_buffer) != DISK_SUCCESS) {
-                return ERROR_IO;
-            }
+            ret = disk_read_block(fs->disk, inode->indirect, indirect_buffer);
+            if (ret != DISK_SUCCESS) return map_disk_error(ret);
 
             uint32_t* block_ptrs = (uint32_t*)indirect_buffer;
             block_num = block_ptrs[indirect_idx];
@@ -213,7 +213,8 @@ int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inode_num,
             memset(block_buffer, 0, BLOCK_SIZE);
 
             if (needs_indirect_write) {
-                if (disk_write_block(fs->disk, inode->indirect, indirect_buffer) != DISK_SUCCESS) {
+                ret = disk_write_block(fs->disk, inode->indirect, indirect_buffer);
+                if (ret != DISK_SUCCESS) {
                     bitmap_clear(fs->block_bitmap, new_block);
                     fs->sb.free_blocks++;
                     *block_num_ptr = 0;
@@ -226,14 +227,13 @@ int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inode_num,
                         inode->blocks_used--;
                     }
 
-                    return ERROR_IO;
+                    return map_disk_error(ret);
                 }
             }
         } else {
             if (start_offset != 0 || remaining < BLOCK_SIZE) {
-                if (disk_read_block(fs->disk, block_num, block_buffer) != DISK_SUCCESS) {
-                    return ERROR_IO;
-                }
+                ret = disk_read_block(fs->disk, block_num, block_buffer);
+                if (ret != DISK_SUCCESS) return map_disk_error(ret);
             } else {
                 memset(block_buffer, 0, BLOCK_SIZE);
             }
@@ -244,7 +244,8 @@ int write_inode_data(filesystem_t* fs, struct inode* inode, uint32_t inode_num,
         memcpy(block_buffer + start_offset, buf_ptr, chunk);
 
         // write block to disk
-        if (disk_write_block(fs->disk, block_num, block_buffer) != DISK_SUCCESS) {
+        ret = disk_write_block(fs->disk, block_num, block_buffer);
+        if (ret != DISK_SUCCESS) {
             if (allocated_data_block) {
                 bitmap_clear(fs->block_bitmap, allocated_data_block_num);
                 fs->sb.free_blocks++;
@@ -352,9 +353,9 @@ int fs_open(filesystem_t* fs, const char* path, uint32_t flags, open_file_t** ou
 
         if (inode.indirect != 0) {
             char indirect_buffer[BLOCK_SIZE];
-            if (disk_read_block(fs->disk, inode.indirect, indirect_buffer) != DISK_SUCCESS) {
-                return ERROR_IO;
-            }
+            res = disk_read_block(fs->disk, inode.indirect, indirect_buffer);
+            if (res != DISK_SUCCESS) return map_disk_error(res);
+            
             uint32_t* block_ptrs = (uint32_t*)indirect_buffer;
 
             for (uint32_t i = 0; i < BLOCK_SIZE / sizeof(uint32_t); i++) {

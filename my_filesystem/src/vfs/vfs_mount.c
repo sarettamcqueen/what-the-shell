@@ -33,7 +33,7 @@ int vfs_format(vfs_t* vfs, const char* filename, uint64_t size_bytes) {
 
     disk_t disk;
     int ret = disk_attach(filename, (long long)aligned, true, &disk);
-    if (ret != DISK_SUCCESS) return ERROR_IO;
+    if (ret != DISK_SUCCESS) return map_disk_error(ret);
 
     uint32_t total_blocks = (uint32_t)(aligned / BLOCK_SIZE);
     uint32_t total_inodes = (uint32_t)(aligned / BYTES_PER_INODE);
@@ -94,7 +94,7 @@ int vfs_mount(vfs_t* vfs, const char* filename, const char* mount_path) {
     // open disk and initialize fs
     disk_t disk;
     int ret = disk_attach(filename, 0, false, &disk);
-    if (ret != DISK_SUCCESS) return ERROR_IO;
+    if (ret != DISK_SUCCESS) return map_disk_error(ret);
 
     filesystem_t* fs = NULL;
     ret = fs_mount(disk, &fs);

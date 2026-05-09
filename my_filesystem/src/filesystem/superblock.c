@@ -8,7 +8,7 @@ int superblock_read(disk_t disk, struct superblock* sb) {
 
     uint8_t buffer[BLOCK_SIZE];
     int res = disk_read_block(disk, SUPERBLOCK_BLOCK_NUM, buffer);
-    if (res != DISK_SUCCESS) return ERROR_IO;
+    if (res != DISK_SUCCESS) return map_disk_error(res);
 
     memcpy(sb, buffer, sizeof(struct superblock));
     return superblock_is_valid(sb) ? SUCCESS : ERROR_INVALID;
@@ -21,7 +21,7 @@ int superblock_write(disk_t disk, const struct superblock* sb) {
     memcpy(buffer, sb, sizeof(struct superblock));
 
     int res = disk_write_block(disk, SUPERBLOCK_BLOCK_NUM, buffer);
-    if (res != DISK_SUCCESS) return ERROR_IO;
+    if (res != DISK_SUCCESS) return map_disk_error(res);
 
     return SUCCESS;
 }

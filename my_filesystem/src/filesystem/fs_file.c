@@ -56,7 +56,7 @@ int fs_create(filesystem_t* fs, const char* path, uint16_t permissions) {
     return superblock_write(fs->disk, &fs->sb);
 
     cleanup_remove_parent_dentry:
-        dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, parent_inode_num, filename);
+        dentry_remove(fs->disk, fs->block_bitmap, parent_inode_num, filename, NULL);
         fs->sb.free_blocks += allocated_blocks;
 
     cleanup_inode:
@@ -158,7 +158,7 @@ int fs_link(filesystem_t* fs, const char* existing_path, const char* new_path) {
     inode.modified_time = time(NULL);
     if (inode_write(fs->disk, existing_inode_num, &inode) != SUCCESS) {
         // rollback the dentry
-        dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, parent_inode_num, filename);
+        dentry_remove(fs->disk, fs->block_bitmap, parent_inode_num, filename, NULL);
         fs->sb.free_blocks += allocated_blocks;
         return ERROR_IO;
     }
@@ -222,8 +222,11 @@ int fs_unlink(filesystem_t* fs, const char* path) {
         return ERROR_PERMISSION;
     }
 
-    res = dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, parent_inode_num, filename);
+    uint32_t freed_dentry_blocks = 0;
+    res = dentry_remove(fs->disk, fs->block_bitmap, parent_inode_num, filename, &freed_dentry_blocks);
     if (res != SUCCESS) return res;
+
+    fs->sb.free_blocks += freed_dentry_blocks;
 
     // decrement link count
     inode.links_count--;
@@ -334,15 +337,17 @@ int fs_rename(filesystem_t* fs, const char* old_path, const char* new_path) {
     fs->sb.free_blocks -= allocated_blocks;
 
     // remove the old dentry
-    res = dentry_remove(fs->disk, fs->block_bitmap, &fs->sb,
-                        old_parent_inode, old_name);
+    uint32_t freed_dentry_blocks = 0;
+    res = dentry_remove(fs->disk, fs->block_bitmap, old_parent_inode,
+                        old_name, &freed_dentry_blocks);
     if (res != SUCCESS) {
         // rollback
-        dentry_remove(fs->disk, fs->block_bitmap, &fs->sb,
-                      new_parent_inode, new_name);
+        dentry_remove(fs->disk, fs->block_bitmap, new_parent_inode, new_name, NULL);
         fs->sb.free_blocks += allocated_blocks;
         return res;
     }
+
+    fs->sb.free_blocks += freed_dentry_blocks;
 
     // update ".." if the directory is being moved to a different parent
     if (old_entry.file_type == INODE_TYPE_DIRECTORY
@@ -354,15 +359,17 @@ int fs_rename(filesystem_t* fs, const char* old_path, const char* new_path) {
         // scope for this implementation.
         // Such inconsistencies would normally be repaired by an offline fsck tool.
 
-        res = dentry_remove(fs->disk, fs->block_bitmap, &fs->sb,
-                            old_entry.inode_num, "..");
+        uint32_t freed_dotdot_blocks = 0;
+        res = dentry_remove(fs->disk, fs->block_bitmap, old_entry.inode_num, "..", &freed_dotdot_blocks);
         if (res != SUCCESS) {
             // rollback the entire move: put the entry back in its original location
-            dentry_remove(fs->disk, fs->block_bitmap, &fs->sb,
-                          new_parent_inode, new_name);
+            dentry_remove(fs->disk, fs->block_bitmap, new_parent_inode, new_name, NULL);
+            fs->sb.free_blocks += allocated_blocks;
+
             uint32_t rb_alloc = 0;
-            dentry_add(fs->disk, old_parent_inode, &old_entry,
-                       fs->block_bitmap, &rb_alloc);
+            dentry_add(fs->disk, old_parent_inode, &old_entry, fs->block_bitmap, &rb_alloc);
+            fs->sb.free_blocks -= rb_alloc;
+
             return res;
         }
 
@@ -379,8 +386,9 @@ int fs_rename(filesystem_t* fs, const char* old_path, const char* new_path) {
             struct dentry old_dotdot;
             if (dentry_create("..", old_parent_inode, INODE_TYPE_DIRECTORY,
                               &old_dotdot) == SUCCESS) {
-                dentry_add(fs->disk, old_entry.inode_num, &old_dotdot,
-                           fs->block_bitmap, NULL);
+                uint32_t rb_dotdot = 0;
+                dentry_add(fs->disk, old_entry.inode_num, &old_dotdot, fs->block_bitmap, &rb_dotdot);
+                fs->sb.free_blocks -= rb_dotdot;
             }
             return ERROR_NO_SPACE;
         }

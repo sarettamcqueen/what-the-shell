@@ -179,12 +179,13 @@ int fs_mkdir(filesystem_t* fs, const char* path, uint16_t permissions) {
         inode_write(fs->disk, parent_inode_num, &parent_inode);
     }
 
-    cleanup_remove_parent_dentry:
+    cleanup_remove_parent_dentry: {
         // remove dentry from parent directory (rollback)
-        dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, parent_inode_num, dirname);
-
+        dentry_remove(fs->disk, fs->block_bitmap, parent_inode_num, dirname, NULL);
         // restore only blocks allocated in the parent directory
         fs->sb.free_blocks += parent_dentry_blocks;
+
+    }
 
     cleanup_inode: {
         // free inode and its blocks
@@ -271,8 +272,11 @@ int fs_rmdir(filesystem_t* fs, const char* path) {
     }
 
     // remove from parent directory
-    res = dentry_remove(fs->disk, fs->block_bitmap, &fs->sb, parent_inode_num, dirname);
+    uint32_t freed_dentry_blocks = 0;
+    res = dentry_remove(fs->disk, fs->block_bitmap, parent_inode_num, dirname, &freed_dentry_blocks);
     if (res != SUCCESS) return res;
+
+    fs->sb.free_blocks += freed_dentry_blocks;
 
     // decrement parent link count
     if (inode_read(fs->disk, parent_inode_num, &parent_inode) != SUCCESS) {

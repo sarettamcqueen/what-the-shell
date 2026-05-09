@@ -23,13 +23,15 @@ int load_bitmaps(filesystem_t* fs) {
         return ERROR_GENERIC;
     }
 
+    int ret;
     // read block bitmap from disk
     for (uint32_t i = 0; i < fs->sb.block_bitmap_blocks; i++) {
         char buffer[BLOCK_SIZE];
-        if (disk_read_block(fs->disk, fs->sb.block_bitmap_start + i, buffer) != DISK_SUCCESS) {
+        ret = disk_read_block(fs->disk, fs->sb.block_bitmap_start + i, buffer);
+        if (ret != DISK_SUCCESS) {
             bitmap_destroy(&fs->block_bitmap);
             bitmap_destroy(&fs->inode_bitmap);
-            return ERROR_IO;
+            return map_disk_error(ret);
         }
         
         size_t bytes_to_copy = BLOCK_SIZE;
@@ -43,10 +45,11 @@ int load_bitmaps(filesystem_t* fs) {
     // read inode bitmap from disk
     for (uint32_t i = 0; i < fs->sb.inode_bitmap_blocks; i++) {
         char buffer[BLOCK_SIZE];
-        if (disk_read_block(fs->disk, fs->sb.inode_bitmap_start + i, buffer) != DISK_SUCCESS) {
+        ret = disk_read_block(fs->disk, fs->sb.inode_bitmap_start + i, buffer);
+        if (ret != DISK_SUCCESS) {
             bitmap_destroy(&fs->block_bitmap);
             bitmap_destroy(&fs->inode_bitmap);
-            return ERROR_IO;
+            return map_disk_error(ret);
         }
         
         size_t bytes_to_copy = BLOCK_SIZE;
@@ -68,6 +71,7 @@ int save_bitmaps(filesystem_t* fs) {
         return ERROR_INVALID;
     }
 
+    int ret;
     // write block bitmap to disk
     for (uint32_t i = 0; i < fs->sb.block_bitmap_blocks; i++) {
         char buffer[BLOCK_SIZE];
@@ -80,9 +84,8 @@ int save_bitmaps(filesystem_t* fs) {
         }
         memcpy(buffer, fs->block_bitmap->data + offset, bytes_to_copy);
         
-        if (disk_write_block(fs->disk, fs->sb.block_bitmap_start + i, buffer) != DISK_SUCCESS) {
-            return ERROR_IO;
-        }
+        ret = disk_write_block(fs->disk, fs->sb.block_bitmap_start + i, buffer);
+        if (ret  != DISK_SUCCESS) return map_disk_error(ret);
     }
 
     // write inode bitmap to disk
@@ -97,9 +100,8 @@ int save_bitmaps(filesystem_t* fs) {
         }
         memcpy(buffer, fs->inode_bitmap->data + offset, bytes_to_copy);
         
-        if (disk_write_block(fs->disk, fs->sb.inode_bitmap_start + i, buffer) != DISK_SUCCESS) {
-            return ERROR_IO;
-        }
+        ret = disk_write_block(fs->disk, fs->sb.inode_bitmap_start + i, buffer);
+        if (ret != DISK_SUCCESS) return map_disk_error(ret);
     }
 
     return SUCCESS;
