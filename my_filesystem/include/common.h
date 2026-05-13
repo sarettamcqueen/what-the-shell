@@ -53,7 +53,7 @@
 #define DENTRIES_PER_BLOCK (BLOCK_SIZE / DENTRY_SIZE)                              
 #define MAX_PATH           1024
 #define MAGIC_NUMBER       0x12345678
-#define BYTES_PER_INODE    8192  // 1 inode every 8KB of disk space
+#define BYTES_PER_INODE    4096  // 1 inode every 4KB of disk space
 #define MIN_INODES         64    // for very small disks
 /*
  * NOTE: MIN_INODES set to 64 establishes an absolute minimum overhead of 20 blocks:
