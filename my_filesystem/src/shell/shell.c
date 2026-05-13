@@ -89,6 +89,7 @@ void shell_run(void) {
 
     free(line);
     vfs_destroy(&my_vfs);
+    printf("Unmounted /\n");
 }
 
 typedef int (*cmd_fn_t)(vfs_t*, int, char**);
