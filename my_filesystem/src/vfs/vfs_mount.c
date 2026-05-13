@@ -83,7 +83,7 @@ int vfs_mount(vfs_t* vfs, const char* filename, const char* mount_path) {
         for (int i = 0; i < MAX_MOUNTS; i++) {
             if (!vfs->mounts[i].is_active) continue;
             if (strcmp(vfs->mounts[i].mount_path, abs_mount) == 0)
-                return ERROR_EXISTS;
+                return ERROR_BUSY;
         }
     } else {
         // no fs mounted yet: mount_path is "/"

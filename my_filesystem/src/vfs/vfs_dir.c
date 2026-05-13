@@ -24,8 +24,16 @@ int vfs_rmdir(vfs_t* vfs, const char* path) {
     int res = vfs_resolve_path(vfs, path, &fs, local_path, sizeof(local_path), abs_path, sizeof(abs_path));
     if (res != SUCCESS) return res;
 
+    // prevent removing the current working directory or any of its parents
     if (path_starts_with(vfs->cwd, abs_path))
         return ERROR_BUSY;
+
+    // prevent removing a directory that is a mount point for another filesystem
+    for (int i = 0; i < MAX_MOUNTS; i++) {
+        if (vfs->mounts[i].is_active && strcmp(vfs->mounts[i].mount_path, abs_path) == 0) {
+            return ERROR_BUSY;
+        }
+    }
     
     return fs_rmdir(fs, local_path);
 }
