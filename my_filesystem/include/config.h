@@ -1,8 +1,8 @@
 /**
    Configuration header file.
   
-   This file defines fundamental constants shared across all modules
-   of the filesystem project. These constants establish basic parameters
+   This file defines fundamental constants and functions shared across all
+   modules of the filesystem project. These constants establish basic parameters
    that must remain consistent throughout the entire system.
   
    Contents:
@@ -21,6 +21,7 @@
 #pragma once
 
 #include <stdio.h>
+#include <assert.h>
 
 #define BLOCK_SIZE 512
 #define MAX_FILENAME 58  // so that the dentry structure is exactly 64 bytes
@@ -31,3 +32,8 @@
 #else
     #define DEBUG_PRINT(fmt, ...) do {} while (0)
 #endif
+
+// === COMPILE-TIME CHECKS ===
+static_assert(BLOCK_SIZE % 512 == 0, "Error: BLOCK_SIZE must be a multiple of 512");
+static_assert(BLOCK_SIZE >= 512, "Error: BLOCK_SIZE is too small");
+static_assert(MAX_FILENAME == 58, "Error: MAX_FILENAME must be 58 to keep dentry size at 64 bytes");
