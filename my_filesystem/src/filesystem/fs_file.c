@@ -59,14 +59,14 @@ int fs_create(filesystem_t* fs, const char* path, uint16_t permissions) {
         dentry_remove(fs->disk, fs->block_bitmap, parent_inode_num, filename, NULL);
         fs->sb.free_blocks += allocated_blocks;
 
-    cleanup_inode:
+    cleanup_inode: {
         uint32_t freed_blocks = 0;
         inode_free(fs->disk, fs->inode_bitmap, fs->block_bitmap, new_inode_num, &freed_blocks);
         fs->sb.free_inodes++;
         fs->sb.free_blocks += freed_blocks;
         save_bitmaps(fs);
         superblock_write(fs->disk, &fs->sb);
-
+    }
     return status;
 }
 

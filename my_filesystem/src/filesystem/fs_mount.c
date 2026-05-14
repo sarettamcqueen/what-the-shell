@@ -295,7 +295,7 @@ int fs_mount(disk_t disk, filesystem_t** out_fs) {
 
     *out_fs = fs;
     DEBUG_PRINT("Filesystem mounted successfully.\n");
-    superblock_print(&fs->sb);
+    //superblock_print(&fs->sb);
 
     return SUCCESS;
 }
